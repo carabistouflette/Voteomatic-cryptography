@@ -3,7 +3,7 @@ package com.voteomatic.cryptography.io;
 /**
  * A specialized DataHandler interface for securely storing and retrieving
  * cryptographic key material.
- *
+ * <p>
  * Implementations of this interface are expected to handle key data with
  * appropriate security measures (e.g., encryption at rest, access controls).
  * It inherits the basic read/write operations from DataHandler but signals
