@@ -27,3 +27,6 @@ replay_pid*
 target
 
 .qodo
+
+# Intellij
+.idea
