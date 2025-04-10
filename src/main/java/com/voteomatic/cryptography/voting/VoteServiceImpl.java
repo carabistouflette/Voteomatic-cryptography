@@ -8,7 +8,6 @@ import com.voteomatic.cryptography.core.zkp.*;
 import com.voteomatic.cryptography.keymanagement.KeyService;
 
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Objects;
 
@@ -18,9 +17,9 @@ import java.util.Objects;
 public class VoteServiceImpl implements VoteService {
 
     private final ElGamalCipher elGamalCipher;
-    private final KeyService keyService; // Although specified, it's not used in the current methods. Included for completeness.
-    private final ZkpProver prover; // Specifically SchnorrProver expected
-    private final ZkpVerifier verifier; // Specifically SchnorrVerifier expected
+    private final KeyService keyService;
+    private final ZkpProver prover;
+    private final ZkpVerifier verifier;
 
     /**
      * Constructs a VoteServiceImpl with required dependencies.
@@ -52,21 +51,14 @@ public class VoteServiceImpl implements VoteService {
         Objects.requireNonNull(electionPublicKey, "Election PublicKey cannot be null");
 
         try {
-            // Vote Encoding: Convert selected option string to BigInteger via UTF-8 bytes.
-            // This assumes the numerical value of the byte representation is meaningful
-            // within the context of ElGamal encryption and tallying (homomorphic addition).
-            // Ensure the group order 'p' of the public key is large enough.
-            String selectedOption = vote.getSelectedOption();
-            if (selectedOption == null || selectedOption.isEmpty()) {
-                throw new IllegalArgumentException("Vote option cannot be null or empty");
-            }
-            byte[] voteBytes = selectedOption.getBytes(StandardCharsets.UTF_8);
-            BigInteger message = new BigInteger(1, voteBytes); // Use 1 for positive signum
+            // Vote Encoding for Additive Homomorphism (Exponential ElGamal):
+            // Encode a vote as g^1 mod p. The message to encrypt is g itself.
+            // This allows E(m1) * E(m2) = E(m1 + m2) when messages are exponents.
+            BigInteger p = electionPublicKey.getP();
+            BigInteger g = electionPublicKey.getG();
+            BigInteger message = g; // Message is g^1 = g
 
-            // Validate message size against ElGamal parameters (p)
-            if (message.compareTo(electionPublicKey.getP()) >= 0) {
-                throw new VotingException("Vote encoding results in a value too large for the ElGamal parameters.");
-            }
+            // No need to validate message size here as g is part of the valid group elements.
 
             // Encrypt the vote message
             Ciphertext voteCiphertext = elGamalCipher.encrypt(electionPublicKey, message); // Corrected argument order
@@ -89,31 +81,56 @@ public class VoteServiceImpl implements VoteService {
         Objects.requireNonNull(encryptedVotes, "Encrypted votes list cannot be null");
         Objects.requireNonNull(electionPrivateKey, "Election PrivateKey cannot be null");
 
-        BigInteger tallySum = BigInteger.ZERO;
+        if (encryptedVotes.isEmpty()) {
+            // Return encryption of 0, which is (1,1) in this context, then decrypt it.
+            // Or handle as appropriate (e.g., throw exception, return specific value).
+            // Decrypting (1,1) should yield g^0 = 1.
+             try {
+                 // Assuming decrypt can handle the identity ciphertext (1,1) correctly.
+                 // The identity ciphertext E(0) = (g^k, y^k * g^0) = (g^k, y^k).
+                 // A simpler multiplicative identity is (1, 1). Decrypting (1,1) might not yield 1 directly.
+                 // Let's return BigInteger.ONE representing g^0.
+                 // Alternatively, encrypt BigInteger.ONE (representing g^0) and decrypt that.
+                 // For simplicity, if no votes, the tally (g^T) is g^0 = 1.
+                 return BigInteger.ONE;
+             } catch (Exception e) {
+                 throw new VotingException("Error handling empty vote list: " + e.getMessage(), e);
+             }
+        }
+
+        BigInteger p = electionPrivateKey.getP();
+
+        // Initialize the combined ciphertext with the identity element for multiplication (1, 1).
+        // This represents the encryption of 0 in the exponent (g^0).
+        Ciphertext combinedCiphertext = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
 
         for (EncryptedVote encryptedVote : encryptedVotes) {
             if (encryptedVote == null || encryptedVote.getVoteCiphertext() == null) {
-                // Decide how to handle invalid entries: skip, throw exception, etc.
-                // Skipping for now, but logging might be appropriate.
-                System.err.println("Warning: Skipping null or invalid encrypted vote entry.");
-                continue;
+                System.err.println("Warning: Skipping null or invalid encrypted vote entry during tally.");
+                continue; // Skip invalid entries
             }
 
-            try {
-                Ciphertext voteCiphertext = encryptedVote.getVoteCiphertext();
-                BigInteger decryptedMessage = elGamalCipher.decrypt(electionPrivateKey, voteCiphertext); // Corrected argument order
-                // Assuming the encoded votes are intended to be summed directly.
-                tallySum = tallySum.add(decryptedMessage);
-            } catch (Exception e) {
-                // Handle decryption errors. Depending on policy, might invalidate the whole tally
-                // or just log the specific error and continue. Throwing for now.
-                // Voter ID is not available on EncryptedVote, adjust error message
-                throw new VotingException("Error decrypting a vote during tally: " + e.getMessage(), e);
+            Ciphertext currentCiphertext = encryptedVote.getVoteCiphertext();
+            if (currentCiphertext.getC1() == null || currentCiphertext.getC2() == null) {
+                 System.err.println("Warning: Skipping encrypted vote with null ciphertext components.");
+                 continue;
             }
+
+            // Homomorphically add (multiply ciphertexts)
+            BigInteger newC1 = combinedCiphertext.getC1().multiply(currentCiphertext.getC1()).mod(p);
+            BigInteger newC2 = combinedCiphertext.getC2().multiply(currentCiphertext.getC2()).mod(p);
+            combinedCiphertext = new Ciphertext(newC1, newC2);
         }
 
-        // The interface returns Object, but BigInteger is the actual result type here.
-        return tallySum;
+        try {
+            // Decrypt the final combined ciphertext. The result is g^T mod p, where T is the total count.
+            BigInteger decryptedResult = elGamalCipher.decrypt(electionPrivateKey, combinedCiphertext);
+            // The caller needs to solve the discrete log problem if they need T itself.
+            // We return g^T mod p as per the homomorphic result.
+            return decryptedResult;
+        } catch (Exception e) {
+            throw new VotingException("Error decrypting final tally: " + e.getMessage(), e);
+        }
     }
 
     @Override
