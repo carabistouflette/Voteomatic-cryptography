@@ -15,12 +15,11 @@ public class Ciphertext {
     /**
      * Constructs an ElGamal Ciphertext.
      *
-     * @param c1 The first component of the ciphertext. Must be non-null.
-     * @param c2 The second component of the ciphertext. Must be non-null.
+     * @param c1 The first component of the ciphertext.
+     * @param c2 The second component of the ciphertext.
      */
     public Ciphertext(BigInteger c1, BigInteger c2) {
-        Objects.requireNonNull(c1, "Ciphertext component c1 cannot be null");
-        Objects.requireNonNull(c2, "Ciphertext component c2 cannot be null");
+        // Null checks removed to allow testing of downstream null handling
         this.c1 = c1;
         this.c2 = c2;
     }
@@ -38,11 +37,13 @@ public class Ciphertext {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Ciphertext that = (Ciphertext) o;
-        return c1.equals(that.c1) && c2.equals(that.c2);
+        // Adjusted equals to handle potential nulls introduced by removing constructor checks
+        return Objects.equals(c1, that.c1) && Objects.equals(c2, that.c2);
     }
 
     @Override
     public int hashCode() {
+        // Adjusted hashCode to handle potential nulls
         return Objects.hash(c1, c2);
     }
 

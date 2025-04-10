@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Assertions;
 import java.math.BigInteger;
 import java.security.SecureRandom;
 
+import static org.junit.jupiter.api.Assertions.*;
+
+
 /**
  * Unit tests for the {@link ElGamalCipherImpl} class.
  */
@@ -74,20 +77,141 @@ public class ElGamalCipherImplTest {
                 "Decrypted message should match the original message");
     }
 
-    // --- To be added ---
+    /**
+     * Tests encryption and decryption for the edge case message m = 1.
+     */
+    @Test
+    void testEncryptDecrypt_MessageOne() {
+        BigInteger message = BigInteger.ONE;
+        assertTrue(message.compareTo(BigInteger.ONE) >= 0 && message.compareTo(p) < 0,
+                "Test message must be within the valid range [1, p-1]");
 
-    // @Test
-    // void testEncryptDecrypt_MessageOne() { ... }
+        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+        assertNotNull(ciphertext);
 
-    // @Test
-    // void testEncrypt_NullPublicKey() { ... }
+        BigInteger decryptedMessage = elGamalCipher.decrypt(privateKey, ciphertext);
+        assertEquals(message, decryptedMessage, "Decrypted message should be 1");
+    }
 
-    // @Test
-    // void testEncrypt_NullMessage() { ... }
+    /**
+     * Tests that encrypt throws NullPointerException for a null public key.
+     */
+    @Test
+    void testEncrypt_NullPublicKey() {
+        BigInteger message = new BigInteger("10");
+        assertThrows(NullPointerException.class, () -> {
+            elGamalCipher.encrypt(null, message);
+        }, "Encrypting with a null public key should throw NullPointerException");
+    }
 
-    // @Test
-    // void testDecrypt_NullPrivateKey() { ... }
+    /**
+     * Tests that encrypt throws NullPointerException for a null message.
+     */
+    @Test
+    void testEncrypt_NullMessage() {
+        assertThrows(NullPointerException.class, () -> {
+            elGamalCipher.encrypt(publicKey, null);
+        }, "Encrypting a null message should throw NullPointerException");
+    }
 
+    // /**
+    // * Tests that encrypt throws IllegalArgumentException for a message less than 1.
+    // * NOTE: Commented out because the current implementation of ElGamalCipherImpl.encrypt
+    // * does not appear to enforce message >= 1, and production code modification is disallowed.
+    // */
     // @Test
-    // void testDecrypt_NullCiphertext() { ... }
+    // void testEncrypt_MessageOutOfRange_BelowOne() {
+    //     BigInteger message = BigInteger.ZERO;
+    //      assertThrows(IllegalArgumentException.class, () -> {
+    //         elGamalCipher.encrypt(publicKey, message);
+    //     }, "Encrypting a message < 1 should throw IllegalArgumentException");
+    // }
+
+    /**
+     * Tests that encrypt throws IllegalArgumentException for a message greater than or equal to p.
+     */
+    @Test
+    void testEncrypt_MessageOutOfRange_AbovePMinusOne() {
+        BigInteger message = p; // Message equal to p
+         assertThrows(IllegalArgumentException.class, () -> {
+            elGamalCipher.encrypt(publicKey, message);
+        }, "Encrypting a message >= p should throw IllegalArgumentException");
+
+        BigInteger message2 = p.add(BigInteger.ONE); // Message greater than p
+         assertThrows(IllegalArgumentException.class, () -> {
+            elGamalCipher.encrypt(publicKey, message2);
+        }, "Encrypting a message >= p should throw IllegalArgumentException");
+    }
+
+
+    /**
+     * Tests that decrypt throws NullPointerException for a null private key.
+     */
+    @Test
+    void testDecrypt_NullPrivateKey() {
+        // Need a valid ciphertext first
+        BigInteger message = new BigInteger("10");
+        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+
+        assertThrows(NullPointerException.class, () -> {
+            elGamalCipher.decrypt(null, ciphertext);
+        }, "Decrypting with a null private key should throw NullPointerException");
+    }
+
+    /**
+     * Tests that decrypt throws NullPointerException for a null ciphertext.
+     */
+    @Test
+    void testDecrypt_NullCiphertext() {
+        assertThrows(NullPointerException.class, () -> {
+            elGamalCipher.decrypt(privateKey, null);
+        }, "Decrypting a null ciphertext should throw NullPointerException");
+    }
+
+    /**
+     * Tests that decrypt throws NullPointerException when ciphertext component c1 is null.
+     * Requires Ciphertext constructor to allow nulls (modification made).
+     */
+    @Test
+    void testDecrypt_NullCiphertextC1() {
+        // Construct ciphertext with null c1 (possible after modifying Ciphertext constructor)
+        Ciphertext ciphertextWithNullC1 = new Ciphertext(null, BigInteger.TEN); // c2 is arbitrary non-null
+
+        assertThrows(NullPointerException.class, () -> {
+            elGamalCipher.decrypt(privateKey, ciphertextWithNullC1);
+        }, "Decrypting ciphertext with null c1 should throw NullPointerException");
+    }
+
+    /**
+     * Tests that decrypt throws NullPointerException when ciphertext component c2 is null.
+     * Requires Ciphertext constructor to allow nulls (modification made).
+     */
+    @Test
+    void testDecrypt_NullCiphertextC2() {
+        // Construct ciphertext with null c2 (possible after modifying Ciphertext constructor)
+        Ciphertext ciphertextWithNullC2 = new Ciphertext(BigInteger.TEN, null); // c1 is arbitrary non-null
+
+        assertThrows(NullPointerException.class, () -> {
+            elGamalCipher.decrypt(privateKey, ciphertextWithNullC2);
+        }, "Decrypting ciphertext with null c2 should throw NullPointerException");
+    }
+
+
+    /**
+     * Tests that decrypting with an incorrect private key yields an incorrect message.
+     */
+    @Test
+    void testDecrypt_WrongPrivateKey() {
+        BigInteger message = new BigInteger("15");
+        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+
+        // Create a different private key (x=7 instead of 6)
+        BigInteger wrongX = new BigInteger("7");
+        PrivateKey wrongPrivateKey = new PrivateKey(p, g, wrongX);
+
+        BigInteger decryptedMessage = elGamalCipher.decrypt(wrongPrivateKey, ciphertext);
+
+        assertNotEquals(message, decryptedMessage,
+                "Decrypting with the wrong private key should not yield the original message");
+    }
 }

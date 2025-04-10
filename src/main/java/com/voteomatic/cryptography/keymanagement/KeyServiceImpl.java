@@ -23,10 +23,9 @@ public class KeyServiceImpl implements KeyService {
 
     private final KeyStorageHandler keyStorageHandler;
     private final SecureRandomGenerator secureRandomGenerator;
-    private final BigInteger p; // Prime modulus for this service instance
-    private final BigInteger g; // Generator for this service instance
+    private final BigInteger p;
+    private final BigInteger g;
 
-    // Suffixes for storing key parts
     private static final String PUBLIC_KEY_SUFFIX = "_public";
     private static final String PRIVATE_KEY_SUFFIX = "_private";
 
@@ -66,14 +65,7 @@ public class KeyServiceImpl implements KeyService {
             // BigInteger q = this.p.subtract(BigInteger.ONE).divide(BigInteger.TWO);
             // x = secureRandomGenerator.generateBigInteger(q.subtract(BigInteger.ONE)).add(BigInteger.ONE); // x in [1, q-1]
 
-            /* Original simpler logic using random bits - less precise range control
-            do {
-                 // Generate x with the same bit length as p, ensuring it's less than p-1
-                 x = secureRandomGenerator.generateRandomBits(this.p.bitLength()).mod(pMinusOne);
-             } while (x.equals(BigInteger.ZERO)); // Ensure x is not 0
-             */
 
-            // Calculate public key y = g^x mod p
             BigInteger y = this.g.modPow(x, this.p);
 
             // Use the instance's p and g when creating key objects
@@ -83,13 +75,12 @@ public class KeyServiceImpl implements KeyService {
             return new KeyPair(publicKey, privateKey);
 
         } catch (Exception e) {
-            // Catching generic Exception for unexpected issues during generation
             throw new KeyManagementException("Failed to generate ElGamal key pair", e);
         }
     }
 
     @Override
-    public void storeKeyPair(KeyPair keyPair, String keyId) throws KeyManagementException { // Signature corrected
+    public void storeKeyPair(KeyPair keyPair, String keyId) throws KeyManagementException {
         if (keyId == null || keyId.trim().isEmpty()) {
             throw new KeyManagementException("Key ID cannot be null or empty.");
         }
@@ -109,12 +100,12 @@ public class KeyServiceImpl implements KeyService {
             keyStorageHandler.writeData(keyId + PUBLIC_KEY_SUFFIX, publicKeyBytes);
             keyStorageHandler.writeData(keyId + PRIVATE_KEY_SUFFIX, privateKeyBytes);
 
-        } catch (DataHandlingException | IOException e) { // IOException can be thrown by new serializers
+        } catch (DataHandlingException | IOException e) {
             throw new KeyManagementException("Failed to store key pair with ID: " + keyId, e);
         }
     }
 
-    @Override // Added missing annotation
+    @Override
     public KeyPair retrieveKeyPair(String keyId) throws KeyManagementException {
         if (keyId == null || keyId.trim().isEmpty()) {
             throw new KeyManagementException("Key ID cannot be null or empty.");
@@ -127,7 +118,6 @@ public class KeyServiceImpl implements KeyService {
             PublicKey publicKey = deserializePublicKey(publicKeyBytes);
             PrivateKey privateKey = deserializePrivateKey(privateKeyBytes);
 
-            // Basic validation after retrieval
             if (publicKey == null || privateKey == null) {
                  throw new KeyManagementException("Retrieved key components are null for ID: " + keyId);
             }
@@ -142,12 +132,12 @@ public class KeyServiceImpl implements KeyService {
 
             return new KeyPair(publicKey, privateKey);
 
-        } catch (DataHandlingException | IOException e) { // ClassNotFoundException no longer thrown
+        } catch (DataHandlingException | IOException e) {
             throw new KeyManagementException("Failed to retrieve key pair with ID: " + keyId, e);
         }
     }
 
-    @Override // Added missing annotation
+    @Override
     public PublicKey getPublicKey(String keyId) throws KeyManagementException {
          if (keyId == null || keyId.trim().isEmpty()) {
             throw new KeyManagementException("Key ID cannot be null or empty.");
@@ -166,29 +156,26 @@ public class KeyServiceImpl implements KeyService {
 
             return publicKey;
 
-        } catch (DataHandlingException | IOException e) { // ClassNotFoundException no longer thrown
+        } catch (DataHandlingException | IOException e) {
             throw new KeyManagementException("Failed to retrieve public key with ID: " + keyId, e);
         }
     }
 
-    @Override // Signature corrected to match interface
+    @Override
     public boolean verifyKeyIntegrity(PublicKey publicKey) throws KeyManagementException {
          if (publicKey == null) {
             throw new KeyManagementException("PublicKey cannot be null for verification.");
         }
 
-         // Check 1: Ensure public key components are present
         if (publicKey.getP() == null || publicKey.getG() == null || publicKey.getY() == null) {
             return false; // Null components
         }
 
-         // Check 2: Verify the public key parameters match the service instance parameters
         if (!this.p.equals(publicKey.getP()) || !this.g.equals(publicKey.getG())) {
             // The key uses different p or g than this service instance is configured for.
             return false;
         }
 
-        // Check 3: Basic validation of y (e.g., y should be in [1, p-1])
         // y = g^x mod p. Since 1 <= x <= p-2 (or q-1), y should not be 0 or 1 typically,
         // unless g has small order or x=p-1 (which we avoid).
         // A simple check is that y is within the valid range.
@@ -208,7 +195,6 @@ public class KeyServiceImpl implements KeyService {
         return true;
     }
 
-    // --- Helper Methods for Custom Key Serialization ---
 
     private byte[] serializePublicKey(PublicKey key) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -226,7 +212,7 @@ public class KeyServiceImpl implements KeyService {
             BigInteger p = deserializeBigInteger(dis);
             BigInteger g = deserializeBigInteger(dis);
             BigInteger y = deserializeBigInteger(dis);
-            // Basic validation: Ensure retrieved keys match service parameters
+            // Ensure retrieved keys match service parameters
             if (!this.p.equals(p) || !this.g.equals(g)) {
                  throw new IOException("Deserialized PublicKey parameters (p, g) do not match service configuration.");
             }
@@ -250,7 +236,7 @@ public class KeyServiceImpl implements KeyService {
             BigInteger p = deserializeBigInteger(dis);
             BigInteger g = deserializeBigInteger(dis);
             BigInteger x = deserializeBigInteger(dis);
-             // Basic validation: Ensure retrieved keys match service parameters
+             // Ensure retrieved keys match service parameters
             if (!this.p.equals(p) || !this.g.equals(g)) {
                  throw new IOException("Deserialized PrivateKey parameters (p, g) do not match service configuration.");
             }
@@ -258,25 +244,23 @@ public class KeyServiceImpl implements KeyService {
         }
     }
 
-    // Helper to serialize a BigInteger
     private void serializeBigInteger(DataOutputStream dos, BigInteger bi) throws IOException {
         byte[] bytes = bi.toByteArray();
         dos.writeInt(bytes.length);
         dos.write(bytes);
     }
 
-    // Helper to deserialize a BigInteger
     private BigInteger deserializeBigInteger(DataInputStream dis) throws IOException {
         int length = dis.readInt();
-        if (length < 0) { // Basic sanity check for length
+        if (length < 0) {
              throw new IOException("Invalid length read for BigInteger: " + length);
         }
-        // Add a reasonable upper limit to prevent OOM errors from malicious data
+        // Prevent OOM errors from malicious data
         if (length > 10 * 1024 * 1024) { // e.g., 10MB limit
             throw new IOException("BigInteger length exceeds safety limit: " + length);
         }
         byte[] bytes = new byte[length];
-        dis.readFully(bytes); // Ensures all bytes are read
+        dis.readFully(bytes);
         return new BigInteger(bytes);
     }
 }

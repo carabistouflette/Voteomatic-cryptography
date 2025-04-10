@@ -16,6 +16,9 @@ public class SHA256HashAlgorithm implements HashAlgorithm {
         if (data == null) {
             throw new SecurityUtilException("Data to be hashed cannot be null.");
         }
+        if (data.length > 100_000_000) { // 100MB max
+            throw new SecurityUtilException("Input data too large (max 100MB)");
+        }
         try {
             MessageDigest digest = MessageDigest.getInstance(ALGORITHM_NAME);
             return digest.digest(data);

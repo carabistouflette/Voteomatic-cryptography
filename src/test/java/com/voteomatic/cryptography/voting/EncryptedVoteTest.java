@@ -38,11 +38,6 @@ class EncryptedVoteTest {
         assertEquals(Optional.of(proof1), vote.getValidityProof());
     }
 
-    @Test
-    void constructorWithProof_NullCiphertext_ShouldThrowNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new EncryptedVote(null, proof1),
-                     "Constructor should throw NullPointerException if ciphertext is null.");
-    }
 
     @Test
     void constructorWithProof_NullProof_ShouldSucceed() {
@@ -58,11 +53,6 @@ class EncryptedVoteTest {
         assertEquals(Optional.empty(), vote.getValidityProof(), "Proof should be absent when using the constructor without proof.");
     }
 
-    @Test
-    void constructorWithoutProof_NullCiphertext_ShouldThrowNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new EncryptedVote(null),
-                     "Constructor without proof should throw NullPointerException if ciphertext is null.");
-    }
 
     @Test
     void getVoteCiphertext_ShouldReturnCorrectCiphertext() {

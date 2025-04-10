@@ -35,6 +35,9 @@ public class SecureRandomGeneratorImpl implements SecureRandomGenerator {
         if (length < 0) {
             throw new SecurityUtilException("Length cannot be negative.");
         }
+        if (length > 1_048_576) { // 1MB max
+            throw new SecurityUtilException("Requested byte length too large (max 1MB)");
+        }
         try {
             byte[] bytes = new byte[length];
             this.secureRandom.nextBytes(bytes);
@@ -67,6 +70,9 @@ public class SecureRandomGeneratorImpl implements SecureRandomGenerator {
     public BigInteger generateRandomBits(int numBits) throws SecurityUtilException {
         if (numBits < 0) {
             throw new SecurityUtilException("Number of bits cannot be negative.");
+        }
+        if (numBits > 10_000) { // 10,000 bits max
+            throw new SecurityUtilException("Requested bit length too large (max 10,000 bits)");
         }
         try {
             // SecureRandom constructor for BigInteger ensures non-negativity

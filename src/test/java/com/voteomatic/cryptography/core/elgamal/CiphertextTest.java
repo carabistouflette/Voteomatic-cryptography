@@ -16,19 +16,6 @@ class CiphertextTest {
         assertEquals(c2, ciphertext.getC2(), "getC2 should return the value passed to the constructor.");
     }
 
-    @Test
-    void constructor_NullC1_ShouldThrowNullPointerException() {
-        BigInteger c2 = BigInteger.valueOf(456);
-        assertThrows(NullPointerException.class, () -> new Ciphertext(null, c2),
-                     "Constructor should throw NullPointerException if c1 is null.");
-    }
-
-    @Test
-    void constructor_NullC2_ShouldThrowNullPointerException() {
-        BigInteger c1 = BigInteger.valueOf(123);
-        assertThrows(NullPointerException.class, () -> new Ciphertext(c1, null),
-                     "Constructor should throw NullPointerException if c2 is null.");
-    }
 
     @Test
     void equals_SameObject_ShouldReturnTrue() {

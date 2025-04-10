@@ -39,6 +39,9 @@ public class DigitalSignatureImpl implements DigitalSignature {
     public byte[] sign(byte[] data, PrivateSigningKey privateKey) throws SecurityUtilException {
         Objects.requireNonNull(data, "Data to sign cannot be null.");
         Objects.requireNonNull(privateKey, "Private signing key cannot be null.");
+        if (data.length == 0) {
+            throw new IllegalArgumentException("Data to sign cannot be empty.");
+        }
 
         if (!(privateKey instanceof PrivateSigningKeyImpl)) {
             throw new SecurityUtilException("Unsupported PrivateSigningKey type: " + privateKey.getClass().getName() +
@@ -70,6 +73,12 @@ public class DigitalSignatureImpl implements DigitalSignature {
         Objects.requireNonNull(data, "Data to verify cannot be null.");
         Objects.requireNonNull(signature, "Signature cannot be null.");
         Objects.requireNonNull(publicKey, "Public verification key cannot be null.");
+        if (data.length == 0) {
+            throw new IllegalArgumentException("Data to verify cannot be empty.");
+        }
+        if (signature.length == 0) {
+            throw new IllegalArgumentException("Signature cannot be empty.");
+        }
 
         if (!(publicKey instanceof PublicVerificationKeyImpl)) {
             throw new SecurityUtilException("Unsupported PublicVerificationKey type: " + publicKey.getClass().getName() +

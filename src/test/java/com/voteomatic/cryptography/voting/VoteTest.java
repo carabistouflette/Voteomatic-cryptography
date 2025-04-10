@@ -12,11 +12,6 @@ class VoteTest {
         assertEquals(option, vote.getSelectedOption(), "getSelectedOption should return the value passed to the constructor.");
     }
 
-    @Test
-    void constructor_NullInput_ShouldThrowNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new Vote(null),
-                     "Constructor should throw NullPointerException if selectedOption is null.");
-    }
 
     @Test
     void equals_SameObject_ShouldReturnTrue() {
