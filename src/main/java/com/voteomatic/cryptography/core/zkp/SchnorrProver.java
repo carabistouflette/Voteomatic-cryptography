@@ -4,8 +4,9 @@ import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Implements the Prover side of Schnorr's protocol for proving knowledge of a discrete logarithm.
@@ -73,12 +74,13 @@ public class SchnorrProver implements ZkpProver<SchnorrStatement, SchnorrWitness
             // 2. Compute commitment t = g^v mod p
             BigInteger t = g.modPow(v, p);
 
-            // 3. Compute challenge c = H(p || q || g || y || t)
-            BigInteger c = computeChallenge(p, q, g, y, t);
+            // 3. Compute challenge c = H(p || q || g || y || t) mod q
+            BigInteger c_hash = computeChallenge(p, q, g, y, t);
+            BigInteger c = c_hash.mod(q); // Reduce the hash modulo q
 
             // 4. Compute response s = (v - c*x) mod q
             // Ensure the result of (v - c*x) is non-negative before mod q
-            BigInteger cx = c.multiply(x).mod(q); // c*x mod q
+            BigInteger cx = c.multiply(x).mod(q); // c is already mod q, but multiply might exceed q
             BigInteger vMinusCx = v.subtract(cx);
             BigInteger s = vMinusCx.mod(q); // (v - c*x) mod q. Handles negative results correctly.
 
@@ -98,11 +100,33 @@ public class SchnorrProver implements ZkpProver<SchnorrStatement, SchnorrWitness
      * Concatenates the string representations of the BigIntegers.
      * A more robust implementation might serialize bytes directly.
      */
+    private void writeBigIntegerWithLength(ByteArrayOutputStream baos, BigInteger val) throws IOException {
+        byte[] bytes = val.toByteArray();
+        int len = bytes.length;
+        // Write length as 4-byte big-endian integer
+        baos.write((len >> 24) & 0xFF);
+        baos.write((len >> 16) & 0xFF);
+        baos.write((len >> 8) & 0xFF);
+        baos.write(len & 0xFF);
+        // Write the actual bytes
+        baos.write(bytes);
+    }
+
     private BigInteger computeChallenge(BigInteger p, BigInteger q, BigInteger g, BigInteger y, BigInteger t) throws SecurityUtilException {
-        // Simple concatenation of string representations. Ensure consistent encoding.
-        String dataToHash = p.toString() + "|" + q.toString() + "|" + g.toString() + "|" + y.toString() + "|" + t.toString();
-        byte[] hashBytes = hashAlgorithm.hash(dataToHash.getBytes(StandardCharsets.UTF_8));
-        // Convert hash bytes to a positive BigInteger
-        return new BigInteger(1, hashBytes);
+        // Concatenate canonical byte representations with length prefixes for hashing.
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            writeBigIntegerWithLength(baos, p);
+            writeBigIntegerWithLength(baos, q);
+            writeBigIntegerWithLength(baos, g);
+            writeBigIntegerWithLength(baos, y);
+            writeBigIntegerWithLength(baos, t);
+            byte[] dataToHash = baos.toByteArray();
+            byte[] hashBytes = hashAlgorithm.hash(dataToHash);
+            // Convert hash bytes to a positive BigInteger
+            return new BigInteger(1, hashBytes);
+        } catch (IOException e) {
+            // Should not happen with ByteArrayOutputStream
+            throw new SecurityUtilException("Error during byte array serialization for challenge", e);
+        }
     }
 }

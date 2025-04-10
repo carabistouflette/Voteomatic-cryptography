@@ -6,7 +6,11 @@ import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -99,13 +103,13 @@ public class KeyServiceImpl implements KeyService {
 
 
         try {
-            byte[] publicKeyBytes = serialize(keyPair.getPublicKey());
-            byte[] privateKeyBytes = serialize(keyPair.getPrivateKey());
+            byte[] publicKeyBytes = serializePublicKey(keyPair.getPublicKey());
+            byte[] privateKeyBytes = serializePrivateKey(keyPair.getPrivateKey());
 
             keyStorageHandler.writeData(keyId + PUBLIC_KEY_SUFFIX, publicKeyBytes);
             keyStorageHandler.writeData(keyId + PRIVATE_KEY_SUFFIX, privateKeyBytes);
 
-        } catch (DataHandlingException | IOException e) {
+        } catch (DataHandlingException | IOException e) { // IOException can be thrown by new serializers
             throw new KeyManagementException("Failed to store key pair with ID: " + keyId, e);
         }
     }
@@ -120,8 +124,8 @@ public class KeyServiceImpl implements KeyService {
             byte[] publicKeyBytes = keyStorageHandler.readData(keyId + PUBLIC_KEY_SUFFIX);
             byte[] privateKeyBytes = keyStorageHandler.readData(keyId + PRIVATE_KEY_SUFFIX);
 
-            PublicKey publicKey = deserialize(publicKeyBytes, PublicKey.class);
-            PrivateKey privateKey = deserialize(privateKeyBytes, PrivateKey.class);
+            PublicKey publicKey = deserializePublicKey(publicKeyBytes);
+            PrivateKey privateKey = deserializePrivateKey(privateKeyBytes);
 
             // Basic validation after retrieval
             if (publicKey == null || privateKey == null) {
@@ -138,7 +142,7 @@ public class KeyServiceImpl implements KeyService {
 
             return new KeyPair(publicKey, privateKey);
 
-        } catch (DataHandlingException | IOException | ClassNotFoundException e) {
+        } catch (DataHandlingException | IOException e) { // ClassNotFoundException no longer thrown
             throw new KeyManagementException("Failed to retrieve key pair with ID: " + keyId, e);
         }
     }
@@ -150,7 +154,7 @@ public class KeyServiceImpl implements KeyService {
         }
         try {
             byte[] publicKeyBytes = keyStorageHandler.readData(keyId + PUBLIC_KEY_SUFFIX);
-            PublicKey publicKey = deserialize(publicKeyBytes, PublicKey.class);
+            PublicKey publicKey = deserializePublicKey(publicKeyBytes);
 
             if (publicKey == null) {
                  throw new KeyManagementException("Retrieved public key is null for ID: " + keyId);
@@ -162,7 +166,7 @@ public class KeyServiceImpl implements KeyService {
 
             return publicKey;
 
-        } catch (DataHandlingException | IOException | ClassNotFoundException e) {
+        } catch (DataHandlingException | IOException e) { // ClassNotFoundException no longer thrown
             throw new KeyManagementException("Failed to retrieve public key with ID: " + keyId, e);
         }
     }
@@ -204,35 +208,75 @@ public class KeyServiceImpl implements KeyService {
         return true;
     }
 
-    // --- Helper Methods for Serialization ---
+    // --- Helper Methods for Custom Key Serialization ---
 
-    private byte[] serialize(Object obj) throws IOException {
-        if (!(obj instanceof Serializable)) {
-            // This check might be redundant now that PublicKey/PrivateKey implement Serializable,
-            // but kept for robustness if other types were serialized.
-            throw new IOException("Object of class " + obj.getClass().getName() + " is not Serializable.");
-        }
+    private byte[] serializePublicKey(PublicKey key) throws IOException {
         try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
-             ObjectOutputStream oos = new ObjectOutputStream(bos)) {
-            oos.writeObject(obj);
+             DataOutputStream dos = new DataOutputStream(bos)) {
+            serializeBigInteger(dos, key.getP());
+            serializeBigInteger(dos, key.getG());
+            serializeBigInteger(dos, key.getY());
             return bos.toByteArray();
         }
     }
 
-    @SuppressWarnings("unchecked") // Suppress warning for cast, protected by class check
-    private <T> T deserialize(byte[] data, Class<T> type) throws IOException, ClassNotFoundException {
-         if (!Serializable.class.isAssignableFrom(type)) {
-             // Redundant check, similar to serialize method.
-            throw new IOException("Class " + type.getName() + " is not Serializable and cannot be deserialized.");
-        }
+    private PublicKey deserializePublicKey(byte[] data) throws IOException {
         try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
-             ObjectInputStream ois = new ObjectInputStream(bis)) {
-            Object obj = ois.readObject();
-            if (type.isInstance(obj)) {
-                return (T) obj;
-            } else {
-                throw new IOException("Deserialized object type mismatch. Expected " + type.getName() + " but got " + obj.getClass().getName());
+             DataInputStream dis = new DataInputStream(bis)) {
+            BigInteger p = deserializeBigInteger(dis);
+            BigInteger g = deserializeBigInteger(dis);
+            BigInteger y = deserializeBigInteger(dis);
+            // Basic validation: Ensure retrieved keys match service parameters
+            if (!this.p.equals(p) || !this.g.equals(g)) {
+                 throw new IOException("Deserialized PublicKey parameters (p, g) do not match service configuration.");
             }
+            return new PublicKey(p, g, y);
         }
+    }
+
+     private byte[] serializePrivateKey(PrivateKey key) throws IOException {
+        try (ByteArrayOutputStream bos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(bos)) {
+            serializeBigInteger(dos, key.getP());
+            serializeBigInteger(dos, key.getG());
+            serializeBigInteger(dos, key.getX());
+            return bos.toByteArray();
+        }
+    }
+
+    private PrivateKey deserializePrivateKey(byte[] data) throws IOException {
+        try (ByteArrayInputStream bis = new ByteArrayInputStream(data);
+             DataInputStream dis = new DataInputStream(bis)) {
+            BigInteger p = deserializeBigInteger(dis);
+            BigInteger g = deserializeBigInteger(dis);
+            BigInteger x = deserializeBigInteger(dis);
+             // Basic validation: Ensure retrieved keys match service parameters
+            if (!this.p.equals(p) || !this.g.equals(g)) {
+                 throw new IOException("Deserialized PrivateKey parameters (p, g) do not match service configuration.");
+            }
+            return new PrivateKey(p, g, x);
+        }
+    }
+
+    // Helper to serialize a BigInteger
+    private void serializeBigInteger(DataOutputStream dos, BigInteger bi) throws IOException {
+        byte[] bytes = bi.toByteArray();
+        dos.writeInt(bytes.length);
+        dos.write(bytes);
+    }
+
+    // Helper to deserialize a BigInteger
+    private BigInteger deserializeBigInteger(DataInputStream dis) throws IOException {
+        int length = dis.readInt();
+        if (length < 0) { // Basic sanity check for length
+             throw new IOException("Invalid length read for BigInteger: " + length);
+        }
+        // Add a reasonable upper limit to prevent OOM errors from malicious data
+        if (length > 10 * 1024 * 1024) { // e.g., 10MB limit
+            throw new IOException("BigInteger length exceeds safety limit: " + length);
+        }
+        byte[] bytes = new byte[length];
+        dis.readFully(bytes); // Ensures all bytes are read
+        return new BigInteger(bytes);
     }
 }

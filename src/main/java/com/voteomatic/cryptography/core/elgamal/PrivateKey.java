@@ -1,7 +1,6 @@
 package com.voteomatic.cryptography.core.elgamal;
 
 import java.math.BigInteger;
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
@@ -9,8 +8,7 @@ import java.util.Objects;
  * Contains the public parameters (p, g) and the private exponent x.
  * It's often useful to include p and g for context during decryption.
  */
-public class PrivateKey implements Serializable {
-    private static final long serialVersionUID = 1L; // Add serialVersionUID for Serializable classes
+public class PrivateKey {
     private final BigInteger p; // Prime modulus (same as in PublicKey)
     private final BigInteger g; // Generator (same as in PublicKey)
     private final BigInteger x; // Private exponent

@@ -1,10 +1,11 @@
 package com.voteomatic.cryptography.core.zkp;
 
-import com.voteomatic.cryptography.securityutils.HashAlgorithm; // Ensure this import is present
-import com.voteomatic.cryptography.securityutils.SecurityUtilException; // Ensure this import is present
+import com.voteomatic.cryptography.securityutils.HashAlgorithm;
+import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 
 /**
  * Implements the Verifier side of Schnorr's protocol.
@@ -64,8 +65,9 @@ public class SchnorrVerifier implements ZkpVerifier<SchnorrStatement, SchnorrPro
 
 
         try {
-            // 1. Re-compute challenge c = H(p || q || g || y || t)
-            BigInteger c = computeChallenge(p, q, g, y, t);
+            // 1. Re-compute challenge c = H(p || q || g || y || t) mod q
+            BigInteger c_hash = computeChallenge(p, q, g, y, t);
+            BigInteger c = c_hash.mod(q); // Reduce the hash modulo q
 
             // 2. Compute check1 = g^s mod p
             BigInteger check1 = g.modPow(s, p);
@@ -92,11 +94,34 @@ public class SchnorrVerifier implements ZkpVerifier<SchnorrStatement, SchnorrPro
      * Computes the challenge c = H(p || q || g || y || t).
      * Must be identical to the prover's challenge computation.
      */
+    private void writeBigIntegerWithLength(ByteArrayOutputStream baos, BigInteger val) throws IOException {
+        byte[] bytes = val.toByteArray();
+        int len = bytes.length;
+        // Write length as 4-byte big-endian integer
+        baos.write((len >> 24) & 0xFF);
+        baos.write((len >> 16) & 0xFF);
+        baos.write((len >> 8) & 0xFF);
+        baos.write(len & 0xFF);
+        // Write the actual bytes
+        baos.write(bytes);
+    }
+
     private BigInteger computeChallenge(BigInteger p, BigInteger q, BigInteger g, BigInteger y, BigInteger t) throws SecurityUtilException {
-        // Simple concatenation of string representations. Ensure consistent encoding.
-        String dataToHash = p.toString() + "|" + q.toString() + "|" + g.toString() + "|" + y.toString() + "|" + t.toString();
-        byte[] hashBytes = hashAlgorithm.hash(dataToHash.getBytes(StandardCharsets.UTF_8));
-        // Convert hash bytes to a positive BigInteger
-        return new BigInteger(1, hashBytes);
+        // Concatenate canonical byte representations with length prefixes for hashing.
+        // Must match the prover's implementation exactly.
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+            writeBigIntegerWithLength(baos, p);
+            writeBigIntegerWithLength(baos, q);
+            writeBigIntegerWithLength(baos, g);
+            writeBigIntegerWithLength(baos, y);
+            writeBigIntegerWithLength(baos, t);
+            byte[] dataToHash = baos.toByteArray();
+            byte[] hashBytes = hashAlgorithm.hash(dataToHash);
+            // Convert hash bytes to a positive BigInteger
+            return new BigInteger(1, hashBytes);
+        } catch (IOException e) {
+            // Should not happen with ByteArrayOutputStream
+            throw new SecurityUtilException("Error during byte array serialization for challenge", e);
+        }
     }
 }

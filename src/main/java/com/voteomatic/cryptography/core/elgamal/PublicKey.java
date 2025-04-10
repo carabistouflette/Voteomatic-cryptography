@@ -1,15 +1,13 @@
 package com.voteomatic.cryptography.core.elgamal;
 
 import java.math.BigInteger;
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
  * Represents an ElGamal public key.
  * Contains the public parameters (p, g) and the public value y = g^x mod p.
  */
-public class PublicKey implements Serializable {
-    private static final long serialVersionUID = 1L; // Add serialVersionUID for Serializable classes
+public class PublicKey {
     private final BigInteger p; // Prime modulus
     private final BigInteger g; // Generator
     private final BigInteger y; // Public value (g^x mod p)
