@@ -1,7 +1,10 @@
 package com.voteomatic.cryptography.io;
 
-import javax.crypto.SecretKey;
-import javax.crypto.spec.SecretKeySpec;
+import java.security.KeyPair;
+import java.security.PrivateKey;
+import java.security.PublicKey;
+import java.security.UnrecoverableKeyException;
+import java.security.cert.Certificate;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -14,24 +17,22 @@ import java.nio.file.StandardCopyOption;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.UnrecoverableEntryException;
 import java.security.cert.CertificateException;
 import java.util.Objects;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 /**
- * Implementation of KeyStorageHandler that persists keys securely in a
+ * Implementation of {@link KeyStorageHandler} that persists key pairs securely in a
  * password-protected PKCS12 KeyStore file.
  *
- * Assumes the caller handles serialization/deserialization of the actual KeyPair
- * objects into/from the byte arrays passed to writeData/readData.
+ * This handler stores standard {@link java.security.KeyPair} objects along with
+ * their associated {@link java.security.cert.Certificate} chain.
  */
 public class PKCS12KeyStorageHandler implements KeyStorageHandler {
 
     private static final Logger LOGGER = Logger.getLogger(PKCS12KeyStorageHandler.class.getName());
     private static final String KEYSTORE_TYPE = "PKCS12";
-    private static final String SECRET_KEY_ALGORITHM = "AES"; // Algorithm name for SecretKeySpec wrapper
 
     private final Path keystorePath;
     private final char[] keystorePassword;
@@ -166,68 +167,110 @@ public class PKCS12KeyStorageHandler implements KeyStorageHandler {
         }
     }
 
+@Override
+public void storeKeyPair(String alias, KeyPair keyPair, Certificate certificate, char[] password) throws DataHandlingException {
+    Objects.requireNonNull(alias, "Alias cannot be null");
+    Objects.requireNonNull(keyPair, "KeyPair cannot be null");
+    Objects.requireNonNull(keyPair.getPrivate(), "Private key in KeyPair cannot be null");
+    Objects.requireNonNull(certificate, "Certificate cannot be null");
+    Objects.requireNonNull(password, "Password cannot be null"); // Password for the key entry itself
 
-    @Override
-    public void writeData(String alias, byte[] data) throws DataHandlingException {
-        Objects.requireNonNull(alias, "Alias cannot be null");
-        Objects.requireNonNull(data, "Data cannot be null");
+    LOGGER.log(Level.INFO, "Attempting to store key pair for alias: {0}", alias);
 
-        LOGGER.log(Level.INFO, "Attempting to write data for alias: {0}", alias);
+    // The certificate chain usually contains just the single certificate for the key pair
+    Certificate[] certificateChain = {certificate};
+    KeyStore.ProtectionParameter entryPasswordProtection = new KeyStore.PasswordProtection(password);
 
-        // Wrap raw bytes into a SecretKey suitable for SecretKeyEntry
-        SecretKey secretKey = new SecretKeySpec(data, SECRET_KEY_ALGORITHM);
-        KeyStore.SecretKeyEntry entry = new KeyStore.SecretKeyEntry(secretKey);
-        KeyStore.ProtectionParameter protectionParam = new KeyStore.PasswordProtection(keystorePassword);
-
-        // Synchronize writes to prevent race conditions when modifying the file
-        synchronized (lock) {
-            KeyStore keyStore = loadKeyStore(); // Load fresh copy before modification
-            try {
-                keyStore.setEntry(alias, entry, protectionParam);
-                saveKeyStore(keyStore);
-                LOGGER.log(Level.INFO, "Successfully wrote data for alias: {0}", alias);
-            } catch (KeyStoreException e) {
-                throw new DataHandlingException("Failed to set entry in keystore for alias: " + alias, e);
-            }
+    // Synchronize writes to prevent race conditions when modifying the file
+    synchronized (lock) {
+        KeyStore keyStore = loadKeyStore(); // Load fresh copy before modification
+        try {
+            // Store the private key and its certificate chain
+            keyStore.setKeyEntry(alias, keyPair.getPrivate(), password, certificateChain);
+            saveKeyStore(keyStore); // Save the updated keystore
+            LOGGER.log(Level.INFO, "Successfully stored key pair for alias: {0}", alias);
+        } catch (KeyStoreException e) {
+            throw new DataHandlingException("Failed to set key entry in keystore for alias: " + alias, e);
         }
     }
+}
 
-    @Override
-    public byte[] readData(String alias) throws DataHandlingException {
-         Objects.requireNonNull(alias, "Alias cannot be null");
-         LOGGER.log(Level.INFO, "Attempting to read data for alias: {0}", alias);
+@Override
+public KeyPair retrieveKeyPair(String alias, char[] password) throws DataHandlingException {
+    Objects.requireNonNull(alias, "Alias cannot be null");
+    Objects.requireNonNull(password, "Password cannot be null");
+    LOGGER.log(Level.INFO, "Attempting to retrieve key pair for alias: {0}", alias);
 
-         // Reads can potentially be concurrent if KeyStore object isn't modified,
-         // but loading from file is simpler and safer for now.
-         KeyStore keyStore = loadKeyStore();
-         try {
-             KeyStore.ProtectionParameter protectionParam = new KeyStore.PasswordProtection(keystorePassword);
-             KeyStore.Entry entry = keyStore.getEntry(alias, protectionParam);
+    KeyStore keyStore = loadKeyStore();
+    try {
+        // Check if the alias exists first
+        if (!keyStore.containsAlias(alias)) {
+             LOGGER.log(Level.WARNING, "Alias not found in keystore: {0}", alias);
+             throw new DataHandlingException("Alias not found in keystore: " + alias);
+        }
 
-             if (entry == null) {
-                 LOGGER.log(Level.WARNING, "Alias not found in keystore: {0}", alias);
-                 throw new DataHandlingException("Alias not found in keystore: " + alias);
-             }
+        // Check if it's a key entry
+        if (!keyStore.isKeyEntry(alias)) {
+            LOGGER.log(Level.SEVERE, "Entry for alias {0} is not a key entry.", alias);
+            throw new DataHandlingException("Keystore entry for alias '" + alias + "' is not a key entry.");
+        }
 
-             if (!(entry instanceof KeyStore.SecretKeyEntry)) {
-                  LOGGER.log(Level.SEVERE, "Entry for alias {0} is not a SecretKeyEntry (unexpected type: {1})", new Object[]{alias, entry.getClass().getName()});
-                 throw new DataHandlingException("Keystore entry for alias '" + alias + "' is not of the expected type (SecretKeyEntry).");
-             }
+        // Retrieve the private key
+        PrivateKey privateKey = (PrivateKey) keyStore.getKey(alias, password);
 
-             KeyStore.SecretKeyEntry secretEntry = (KeyStore.SecretKeyEntry) entry;
-             SecretKey secretKey = secretEntry.getSecretKey();
+        // Retrieve the corresponding certificate to get the public key
+        Certificate certificate = keyStore.getCertificate(alias);
+        if (certificate == null) {
+            // This shouldn't happen if setKeyEntry was used correctly, but check defensively
+            LOGGER.log(Level.SEVERE, "Certificate not found for alias {0}, although private key exists.", alias);
+            throw new DataHandlingException("Certificate not found for alias '" + alias + "' in keystore.");
+        }
+        PublicKey publicKey = certificate.getPublicKey();
 
-             if (!SECRET_KEY_ALGORITHM.equals(secretKey.getAlgorithm())) {
-                 LOGGER.log(Level.SEVERE, "SecretKey algorithm mismatch for alias {0}. Expected {1}, found {2}", new Object[]{alias, SECRET_KEY_ALGORITHM, secretKey.getAlgorithm()});
-                 throw new DataHandlingException("SecretKey algorithm mismatch for alias '" + alias + "'. Data may be corrupted or stored incorrectly.");
-             }
+        LOGGER.log(Level.INFO, "Successfully retrieved key pair for alias: {0}", alias);
+        return new KeyPair(publicKey, privateKey);
 
-             byte[] data = secretKey.getEncoded();
-             LOGGER.log(Level.INFO, "Successfully read data for alias: {0}", alias);
-             return data;
-
-         } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableEntryException e) {
-             throw new DataHandlingException("Failed to retrieve entry from keystore for alias: " + alias, e);
+    } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableKeyException e) {
+         // UnrecoverableKeyException often indicates incorrect password
+         if (e instanceof UnrecoverableKeyException) {
+              LOGGER.log(Level.WARNING, "Failed to retrieve key for alias {0}: Incorrect password or corrupted key.", alias);
+              throw new DataHandlingException("Failed to retrieve key for alias '" + alias + "': Incorrect password provided.", e);
          }
+        throw new DataHandlingException("Failed to retrieve key entry from keystore for alias: " + alias, e);
+    } catch (ClassCastException e) {
+        // Should not happen if isKeyEntry check passes and storage was correct
+        LOGGER.log(Level.SEVERE, "Retrieved key for alias {0} was not a PrivateKey.", alias);
+        throw new DataHandlingException("Retrieved key for alias '" + alias + "' was not of the expected type (PrivateKey).", e);
     }
+}
+
+@Override
+public PublicKey getPublicKey(String alias) throws DataHandlingException {
+    Objects.requireNonNull(alias, "Alias cannot be null");
+    LOGGER.log(Level.INFO, "Attempting to retrieve public key for alias: {0}", alias);
+
+    KeyStore keyStore = loadKeyStore();
+    try {
+        // Check if the alias exists first
+        if (!keyStore.containsAlias(alias)) {
+             LOGGER.log(Level.WARNING, "Alias not found in keystore: {0}", alias);
+             throw new DataHandlingException("Alias not found in keystore: " + alias);
+        }
+
+        // Retrieve the certificate associated with the alias
+        Certificate certificate = keyStore.getCertificate(alias);
+        if (certificate == null) {
+            // This could happen if it's a trusted certificate entry, not a key entry
+            LOGGER.log(Level.WARNING, "No certificate found for alias {0}. It might not be a key pair entry.", alias);
+            throw new DataHandlingException("No certificate found for alias '" + alias + "'. Cannot retrieve public key.");
+        }
+
+        PublicKey publicKey = certificate.getPublicKey();
+        LOGGER.log(Level.INFO, "Successfully retrieved public key for alias: {0}", alias);
+        return publicKey;
+
+    } catch (KeyStoreException e) {
+        throw new DataHandlingException("Failed to retrieve certificate from keystore for alias: " + alias, e);
+    }
+}
 }

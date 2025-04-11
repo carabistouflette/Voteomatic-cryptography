@@ -1,73 +1,16 @@
-# Voteomatic Cryptography - TODO List
+# Project TODOs - Code Analysis Findings
 
-This document lists identified issues and potential improvements for the Voteomatic Cryptography project based on code analysis.
-
-## Critical Issues
-
-### Voting Logic (`voting/VoteServiceImpl.java`)
-
-*   **Issue:** Incorrect Tallying Method. Decrypts each vote individually before summing, completely violating ballot secrecy.
-    *   **Solution:** Implement correct homomorphic tallying: Multiply the ElGamal ciphertexts component-wise (`C = C1 * C2 * ... * Cn`) and decrypt *only* the final combined ciphertext `C`.
-*   **Issue:** Unsuitable Vote Encoding. Encodes vote strings directly to `BigInteger` via UTF-8 bytes. This is incompatible with meaningful homomorphic tallying.
-    *   **Solution:** Implement a proper encoding scheme mapping vote choices to group elements suitable for homomorphic addition (e.g., "Yes" -> `g^1`, "No" -> `g^0`).
-*   **Issue:** Missing ZKP Generation in `castVote`. No proof of vote validity (e.g., proving the encrypted value corresponds to a valid option) is generated.
-    *   **Solution:** Integrate ZKP generation (e.g., Schnorr proof of knowledge of the discrete log of the plaintext, or a proof of valid range/set membership) into the `castVote` method. The proof should accompany the ciphertext.
-
-## Security Vulnerabilities & Best Practices
-
-### Core ElGamal (`core/elgamal/ElGamalCipherImpl.java`)
-
-*   **Issue:** Textbook ElGamal Malleability. Vulnerable to ciphertext manipulation.
-    *   **Solution:** Consider using a non-malleable variant (e.g., Cramer-Shoup) or integrate NIZKs to prove plaintext properties.
-*   **Issue:** Lack of Cryptographic Parameter Validation. Assumes `p` and `g` are valid.
-    *   **Solution:** Implement robust validation of `p` and `g` during key generation/loading (primality, safe prime, generator order).
-*   **Issue:** Inadequate Message Encoding. Treats messages directly as `BigInteger`.
-    *   **Solution:** Define and implement a clear, secure encoding scheme mapping application data (votes) to group elements.
-*   **Issue:** Suboptimal Ephemeral Key (`k`) Range. Uses `[1, p-2]`.
-    *   **Solution:** Use the subgroup order `q` and generate `k` in `[1, q-1]`.
-*   **Issue:** Potential Timing Side-Channels. `BigInteger` operations may not be constant-time.
-    *   **Solution:** Consider using cryptographic libraries with constant-time implementations.
-
-### Schnorr ZKP (`core/zkp/SchnorrProver.java`, `core/zkp/SchnorrVerifier.java`)
-
-*   **Issue:** Non-Standard Challenge Hash Input Serialization. Custom `writeBigIntegerWithLength`.
-    *   **Solution:** Use a well-defined, standard, canonical serialization format for hashing inputs.
-*   **Issue:** Lack of Cryptographic Parameter Validation. Assumes group parameters (`p`, `q`, `g`) are valid.
-    *   **Solution:** Validate parameters during setup or loading.
-*   **Issue:** Potential Timing Side-Channels. `BigInteger` operations.
-    *   **Solution:** Use constant-time implementations where feasible.
-
-### Key Management (`keymanagement/KeyServiceImpl.java`)
-
-*   **Issue:** Lack of Cryptographic Parameter Validation. Constructor accepts `p` and `g` without validation.
-    *   **Solution:** Add validation for `p` (primality, safe prime) and `g` (generator order).
-*   **Issue:** Suboptimal Private Key (`x`) Range. Generates `x` in `[1, p-1]`.
-    *   **Solution:** Generate `x` within the subgroup order `[1, q-1]`.
-*   **Issue:** Custom Key Serialization Format. Non-standard binary format.
-    *   **Solution:** Use standard, interoperable formats (JCA `KeySpec`, PEM, JWK, Protobuf).
-*   **Issue:** Incomplete Public Key Integrity Check (`verifyKeyIntegrity`). Lacks subgroup membership check for `y`.
-    *   **Solution:** Implement the subgroup membership check (`y^q mod p == 1`).
-
-## Structural & Code Quality Issues
-
-### Schnorr ZKP (`core/zkp/SchnorrProver.java`, `core/zkp/SchnorrVerifier.java`)
-
-*   **Issue:** Code Duplication in Challenge Generation. `computeChallenge` logic duplicated.
-    *   **Solution:** Refactor into a shared utility class/method.
-
-### Voting Logic (`voting/VoteServiceImpl.java`)
-
-*   **Issue:** Structural - Tight Coupling in `verifyVote`. Uses `instanceof` for ZKP types.
-    *   **Solution:** Use a more flexible approach (generics, factories) if multiple ZKP schemes are needed.
-
-### Key Management (`keymanagement/KeyServiceImpl.java`)
-
-*   **Issue:** Parameter Rigidity. Ties all keys to a single `p` and `g`.
-    *   **Solution:** Consider designs allowing management of keys with different parameter sets if needed.
-
-### Security Utilities (`securityutils/`)
-
-*   **Issue:** Tight Coupling in `DigitalSignatureImpl.java`. Uses `instanceof` for key types.
-    *   **Solution:** Modify key interfaces to include methods for retrieving underlying JCA objects.
-*   **Issue:** Generic Exception Handling. Catches generic `Exception`.
-    *   **Solution:** Catch more specific exceptions where possible; document if generic `Exception` is unavoidable.
+*   [x] [Security: Critical] Dependency Vulnerability Check: The `pom.xml` uses Bouncy Castle (`org.bouncycastle:bcprov-jdk18on:1.80`). This specific version should be checked against known vulnerability databases (e.g., CVEs) to ensure it's not susceptible to known exploits. Suggestion: Integrate an automated dependency scanning tool (like OWASP Dependency-Check Maven plugin) into the build process.
+*   [x] [Security: High] Insecure Key Storage: `InMemoryKeyStorageHandler` stores cryptographic keys only in memory. This is unsuitable for production as keys are lost on restart and potentially exposed in memory dumps. Suggestion: Implement a secure persistent key storage mechanism (e.g., using a hardware security module (HSM), secure key vault service, or appropriately protected file storage) for production environments.
+*   [ ] [Security: Medium] Custom Key Serialization: `KeyServiceImpl` uses custom `DataOutputStream`/`DataInputStream` logic for key serialization/deserialization. Custom serialization is error-prone and can lead to vulnerabilities if not implemented carefully. Suggestion: Thoroughly review the custom serialization logic for security flaws (e.g., length checks, data validation) or consider using established, well-vetted serialization formats/libraries if appropriate for the key types.
+*   [ ] [Security: Medium] ZKP Implementation Correctness: Zero-Knowledge Proof implementations (Schnorr, Disjunctive Chaum-Pedersen) are complex. Subtle bugs could compromise soundness (accepting invalid proofs) or the zero-knowledge property (leaking secret information). Suggestion: Conduct a thorough expert review of the ZKP implementation logic, especially the challenge generation (`calculateChallenge`, `computeChallenge`) and verification steps, comparing against established cryptographic literature.
+*   [ ] [Security: Medium] Cryptographic Parameter Management: The security of ElGamal and ZKP schemes heavily depends on the correct choice and management of cryptographic parameters (e.g., prime `p`, generator `g`, subgroup order `q`). Hardcoding weak parameters or improper generation/validation can lead to vulnerabilities. Suggestion: Review how cryptographic parameters are generated, validated, and configured. Avoid hardcoding parameters directly in the source code; use secure configuration mechanisms.
+*   [ ] [Security: Low] Secure Random Usage: The code uses `SecureRandomGenerator` backed by `java.security.SecureRandom`. While good, ensure the `SecureRandom` instance is properly seeded and managed throughout its lifecycle, especially if used across different threads or contexts. Suggestion: Verify the instantiation and usage patterns of `SecureRandomGeneratorImpl`.
+*   [ ] [Security: Low] Potential Side-Channel Attacks: Operations involving `BigInteger`, especially modular exponentiation, might be susceptible to timing attacks if not implemented using constant-time techniques where necessary. Suggestion: Review critical cryptographic operations involving sensitive values (private keys, randomness) to assess potential timing variations. Rely on Bouncy Castle's implementations where possible, as they often include countermeasures.
+*   [ ] [Structure: Medium] Code Duplication in ZKP: The challenge calculation logic (`calculateChallenge`/`computeChallenge`) and byte serialization (`writeBigIntegerWithLength`) appear duplicated between the Prover and Verifier classes for both Schnorr and Disjunctive Chaum-Pedersen protocols. Suggestion: Refactor this duplicated logic into shared utility classes or methods within the `core.zkp` package to improve maintainability and reduce redundancy.
+*   [ ] [Structure: Medium] Potential Complexity in Service Implementations: Classes like `KeyServiceImpl` and `VoteServiceImpl` integrate multiple functionalities (key operations, serialization, vote encryption, proof generation/verification) and might have high cyclomatic complexity. Suggestion: Consider applying static analysis tools to measure complexity. If high, refactor these classes into smaller, more focused components following the Single Responsibility Principle.
+*   [ ] [Structure: Low] Test Coverage Assessment: The project includes JaCoCo and has a parallel test structure, indicating unit tests exist. However, the actual coverage percentage and quality are unknown. Insufficient testing, especially for cryptographic primitives, is risky. Suggestion: Run the JaCoCo report (`mvn test jacoco:report`) to assess coverage. Aim for high coverage, particularly for core cryptographic logic (`core.elgamal`, `core.zkp`, `securityutils`) and ensure tests cover edge cases and failure scenarios.
+*   [ ] [Structure: Low] Error Handling Consistency: Custom exceptions are defined, which is good practice. Ensure that exceptions are used consistently, provide meaningful context, and are handled appropriately by callers. Suggestion: Review exception handling patterns across the codebase for consistency and clarity.
+*   [ ] [Performance: Medium] BigInteger Performance: Cryptographic operations relying heavily on `BigInteger` (modular exponentiation, multiplication) can be computationally expensive. Suggestion: Profile critical code paths (e.g., proof generation/verification, encryption/decryption) under realistic load to identify potential bottlenecks. Investigate if Bouncy Castle's optimized implementations can be leveraged more effectively.
+*   [ ] [Performance: Low] Object Creation Overhead: Frequent creation of `BigInteger` or other objects within performance-sensitive loops (if any exist) could lead to garbage collection overhead. Suggestion: Review loops in computationally intensive sections (like ZKP calculations) for unnecessary object allocations.
+*   [ ] [Performance: Low] Serialization Efficiency: The custom serialization in `KeyServiceImpl` might be less performant than optimized library-based approaches, depending on the implementation details. Suggestion: If key serialization/deserialization proves to be a bottleneck, benchmark the current implementation against alternatives.

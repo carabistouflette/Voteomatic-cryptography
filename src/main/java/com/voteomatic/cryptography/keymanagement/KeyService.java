@@ -21,19 +21,21 @@ public interface KeyService {
      * The underlying implementation should handle secure storage.
      *
      * @param keyPair    The KeyPair to store.
-     * @param identifier A unique identifier for the key pair (e.g., user ID, election ID).
+     * @param identifier A unique identifier (alias) for the key pair.
+     * @param password   The password to protect the key entry in the underlying storage.
      * @throws KeyManagementException if storing the key fails (e.g., identifier collision, storage error).
      */
-    void storeKeyPair(KeyPair keyPair, String identifier) throws KeyManagementException;
+    void storeKeyPair(KeyPair keyPair, String identifier, char[] password) throws KeyManagementException;
 
     /**
      * Retrieves a previously stored key pair using its identifier.
      *
-     * @param identifier The unique identifier of the key pair to retrieve.
+     * @param identifier The unique identifier (alias) of the key pair to retrieve.
+     * @param password   The password required to access the key entry in the underlying storage.
      * @return The retrieved KeyPair.
-     * @throws KeyManagementException if the key pair is not found or retrieval fails.
+     * @throws KeyManagementException if the key pair is not found, the password is incorrect, or retrieval fails.
      */
-    KeyPair retrieveKeyPair(String identifier) throws KeyManagementException;
+    KeyPair retrieveKeyPair(String identifier, char[] password) throws KeyManagementException;
 
     /**
      * Retrieves only the public key associated with a given identifier.
