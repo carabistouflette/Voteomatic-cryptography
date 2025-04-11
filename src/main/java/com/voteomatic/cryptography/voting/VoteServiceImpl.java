@@ -1,7 +1,6 @@
 package com.voteomatic.cryptography.voting;
 
-import com.voteomatic.cryptography.core.elgamal.Ciphertext;
-import com.voteomatic.cryptography.core.elgamal.ElGamalCipher;
+import com.voteomatic.cryptography.core.elgamal.*; // Import EncryptionResult
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.core.zkp.*;
@@ -50,26 +49,63 @@ public class VoteServiceImpl implements VoteService {
         Objects.requireNonNull(vote, "Vote cannot be null");
         Objects.requireNonNull(electionPublicKey, "Election PublicKey cannot be null");
 
+        // Validate vote option
+        String selectedOption = vote.getSelectedOption();
+        if (selectedOption == null || selectedOption.isEmpty()) {
+            throw new IllegalArgumentException("Vote option cannot be null or empty");
+        }
+
         try {
-            // Vote Encoding for Additive Homomorphism (Exponential ElGamal):
-            // Encode a vote as g^1 mod p. The message to encrypt is g itself.
-            // This allows E(m1) * E(m2) = E(m1 + m2) when messages are exponents.
+            // Encode vote string ("Yes"/"No") to group element (g^1 / g^0)
             BigInteger p = electionPublicKey.getP();
             BigInteger g = electionPublicKey.getG();
-            BigInteger message = g; // Message is g^1 = g
+            BigInteger message;
 
-            // No need to validate message size here as g is part of the valid group elements.
+            if ("Yes".equalsIgnoreCase(selectedOption)) {
+                message = g; // g^1 mod p
+            } else if ("No".equalsIgnoreCase(selectedOption)) {
+                message = BigInteger.ONE; // g^0 mod p
+            } else {
+                throw new VotingException("Invalid vote option: '" + selectedOption + "'. Only 'Yes' or 'No' are allowed.");
+            }
 
-            // Encrypt the vote message
-            Ciphertext voteCiphertext = elGamalCipher.encrypt(electionPublicKey, message); // Corrected argument order
+            // Basic validation (g^1 and g^0 should always be < p if parameters are valid)
+            // This check might be redundant if key generation ensures g < p, but kept for safety.
+            if (message.compareTo(p) >= 0) {
+                // This case should theoretically not happen with g^1 or g^0 encoding
+                throw new VotingException("Encoded vote value is unexpectedly too large for the ElGamal parameters.");
+            }
 
-            // ZKP Generation is skipped for this iteration. Proof is null.
-            Proof proof = null;
+            // Encrypt the encoded vote message and get randomness
+            EncryptionResult encryptionResult = elGamalCipher.encrypt(electionPublicKey, message);
+            Ciphertext voteCiphertext = encryptionResult.getCiphertext();
+            BigInteger randomness = encryptionResult.getRandomness(); // The 'r' value
 
-            return new EncryptedVote(voteCiphertext, proof); // Corrected constructor call
+            // Determine vote index v (0 for No, 1 for Yes) and possible messages m0, m1
+            int voteIndex;
+            BigInteger m0 = BigInteger.ONE; // g^0
+            BigInteger m1 = g;             // g^1
+            if ("Yes".equalsIgnoreCase(selectedOption)) {
+                voteIndex = 1;
+            } else { // Must be "No" due to earlier validation
+                voteIndex = 0;
+            }
+
+            // Create ZKP Statement and Witness
+            DisjunctiveChaumPedersenStatement statement = new DisjunctiveChaumPedersenStatement(
+                    electionPublicKey, voteCiphertext, m0, m1
+            );
+            DisjunctiveChaumPedersenWitness witness = new DisjunctiveChaumPedersenWitness(randomness, voteIndex);
+
+            // Generate the ZKP proof using the injected prover
+            // Assumes the injected prover is configured as DisjunctiveChaumPedersenProver
+            Proof proof = prover.generateProof(statement, witness);
+
+            // Return EncryptedVote with ciphertext and proof
+            return new EncryptedVote(voteCiphertext, proof);
 
         } catch (IllegalArgumentException e) {
-            throw e; // Re-throw specific argument exceptions
+            throw e; // Re-throw specific argument exceptions (e.g., from encoding)
         } catch (Exception e) {
             // Wrap other potential exceptions (e.g., from encryption)
             throw new VotingException("Error casting vote: " + e.getMessage(), e);
@@ -77,32 +113,19 @@ public class VoteServiceImpl implements VoteService {
     }
 
     @Override
-    public Object tallyVotes(List<EncryptedVote> encryptedVotes, PrivateKey electionPrivateKey) throws VotingException {
+    public BigInteger tallyVotes(List<EncryptedVote> encryptedVotes, PrivateKey electionPrivateKey) throws VotingException {
         Objects.requireNonNull(encryptedVotes, "Encrypted votes list cannot be null");
         Objects.requireNonNull(electionPrivateKey, "Election PrivateKey cannot be null");
 
         if (encryptedVotes.isEmpty()) {
-            // Return encryption of 0, which is (1,1) in this context, then decrypt it.
-            // Or handle as appropriate (e.g., throw exception, return specific value).
-            // Decrypting (1,1) should yield g^0 = 1.
-             try {
-                 // Assuming decrypt can handle the identity ciphertext (1,1) correctly.
-                 // The identity ciphertext E(0) = (g^k, y^k * g^0) = (g^k, y^k).
-                 // A simpler multiplicative identity is (1, 1). Decrypting (1,1) might not yield 1 directly.
-                 // Let's return BigInteger.ONE representing g^0.
-                 // Alternatively, encrypt BigInteger.ONE (representing g^0) and decrypt that.
-                 // For simplicity, if no votes, the tally (g^T) is g^0 = 1.
-                 return BigInteger.ONE;
-             } catch (Exception e) {
-                 throw new VotingException("Error handling empty vote list: " + e.getMessage(), e);
-             }
+            // If there are no votes, the tally k is 0.
+            return BigInteger.ZERO;
         }
 
-        BigInteger p = electionPrivateKey.getP();
+        BigInteger p = electionPrivateKey.getP(); // Get modulus from private key
 
-        // Initialize the combined ciphertext with the identity element for multiplication (1, 1).
-        // This represents the encryption of 0 in the exponent (g^0).
-        Ciphertext combinedCiphertext = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
+        // Initialize accumulated ciphertext with the identity element (1, 1)
+        Ciphertext accumulatedCiphertext = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
 
         for (EncryptedVote encryptedVote : encryptedVotes) {
             if (encryptedVote == null || encryptedVote.getVoteCiphertext() == null) {
@@ -112,57 +135,79 @@ public class VoteServiceImpl implements VoteService {
 
             Ciphertext currentCiphertext = encryptedVote.getVoteCiphertext();
             if (currentCiphertext.getC1() == null || currentCiphertext.getC2() == null) {
-                 System.err.println("Warning: Skipping encrypted vote with null ciphertext components.");
-                 continue;
+                System.err.println("Warning: Skipping encrypted vote with null ciphertext components.");
+                continue;
             }
 
-            // Homomorphically add (multiply ciphertexts)
-            BigInteger newC1 = combinedCiphertext.getC1().multiply(currentCiphertext.getC1()).mod(p);
-            BigInteger newC2 = combinedCiphertext.getC2().multiply(currentCiphertext.getC2()).mod(p);
-            combinedCiphertext = new Ciphertext(newC1, newC2);
+            try {
+                // Homomorphically multiply the ciphertexts
+                accumulatedCiphertext = accumulatedCiphertext.multiply(currentCiphertext, p);
+            } catch (Exception e) {
+                // Handle potential errors during multiplication (e.g., nulls if checks fail, though added)
+                throw new VotingException("Error multiplying ciphertexts during tally: " + e.getMessage(), e);
+            }
         }
 
         try {
-            // Decrypt the final combined ciphertext. The result is g^T mod p, where T is the total count.
-            BigInteger decryptedResult = elGamalCipher.decrypt(electionPrivateKey, combinedCiphertext);
-            // The caller needs to solve the discrete log problem if they need T itself.
-            // We return g^T mod p as per the homomorphic result.
-            return decryptedResult;
+            // Decrypt the final accumulated ciphertext
+            BigInteger decryptedResultGk = elGamalCipher.decrypt(electionPrivateKey, accumulatedCiphertext); // This is g^k mod p
+
+            // Find k by solving the discrete logarithm g^k = decryptedResultGk (mod p)
+            // Since k represents the count of "Yes" votes (encoded as g^1),
+            // we can find it by trial exponentiation for small k.
+            BigInteger g = electionPrivateKey.getG();
+            BigInteger currentGPower = BigInteger.ONE; // Start with g^0
+            BigInteger k = BigInteger.ZERO;
+
+            // Set a reasonable limit to prevent infinite loops in unexpected scenarios
+            // The maximum possible value for k is the number of votes cast.
+            int maxIterations = encryptedVotes.size();
+
+            for (int i = 0; i <= maxIterations; i++) {
+                if (currentGPower.equals(decryptedResultGk)) {
+                    return k; // Found the tally k
+                }
+                // Calculate next power: g^(i+1) = g^i * g mod p
+                currentGPower = currentGPower.multiply(g).mod(p);
+                k = k.add(BigInteger.ONE);
+            }
+
+            // If the loop finishes without finding k, something is wrong.
+            // This might happen if the decrypted result is not a power of g,
+            // indicating potential corruption or an issue in the crypto implementation.
+            throw new VotingException("Could not determine the vote tally (k) from the decrypted result (g^k). Decrypted value: " + decryptedResultGk);
+
         } catch (Exception e) {
-            throw new VotingException("Error decrypting final tally: " + e.getMessage(), e);
+            // Wrap decryption or tally interpretation error
+            throw new VotingException("Error during final tally decryption or interpretation: " + e.getMessage(), e);
         }
     }
 
     @Override
     public boolean verifyVote(EncryptedVote encryptedVote, Statement statement, Proof proof) throws VotingException, ZkpException {
-        Objects.requireNonNull(encryptedVote, "EncryptedVote cannot be null");
-        // Statement and Proof can be null if ZKP is not used/provided.
+        // EncryptedVote parameter is currently unused but kept for signature compatibility.
+        // A better design might reconstruct the statement internally using the public key.
+        Objects.requireNonNull(statement, "Statement cannot be null for verification");
+        Objects.requireNonNull(proof, "Proof cannot be null for verification");
 
-        // As per requirements, ZKP generation is skipped in castVote, so proof will be null.
-        if (proof == null) {
-            // If no proof is provided (as expected in this iteration), verification cannot proceed.
-            // Depending on the desired behavior, could return false or throw an exception.
-            // Returning false seems appropriate given the context.
-            return false;
-        }
-
-        // Check if the provided statement and proof are of the expected Schnorr types.
-        if (!(statement instanceof SchnorrStatement)) {
-             throw new IllegalArgumentException("Statement must be an instance of SchnorrStatement for verification.");
+        // Check if the provided statement and proof are of the expected DisjunctiveChaumPedersen types.
+        if (!(statement instanceof DisjunctiveChaumPedersenStatement)) {
+             throw new IllegalArgumentException("Statement must be an instance of DisjunctiveChaumPedersenStatement for verification.");
            // return false; // Alternatively, just return false if type mismatch means invalid proof
         }
-        if (!(proof instanceof SchnorrProof)) {
-             throw new IllegalArgumentException("Proof must be an instance of SchnorrProof for verification.");
+        if (!(proof instanceof DisjunctiveChaumPedersenProof)) {
+             throw new IllegalArgumentException("Proof must be an instance of DisjunctiveChaumPedersenProof for verification.");
            // return false; // Alternatively, just return false
         }
 
         // Cast to specific types
-        SchnorrStatement schnorrStatement = (SchnorrStatement) statement;
-        SchnorrProof schnorrProof = (SchnorrProof) proof;
+        DisjunctiveChaumPedersenStatement dcpStatement = (DisjunctiveChaumPedersenStatement) statement;
+        DisjunctiveChaumPedersenProof dcpProof = (DisjunctiveChaumPedersenProof) proof;
 
         try {
             // Use the injected ZkpVerifier (expected to be SchnorrVerifier)
-            return verifier.verifyProof(schnorrStatement, schnorrProof);
+            // Use the injected ZkpVerifier (expected to be DisjunctiveChaumPedersenVerifier)
+            return verifier.verifyProof(dcpStatement, dcpProof);
         } catch (ZkpException e) {
             // Propagate ZKP-specific exceptions
             throw e;

@@ -62,7 +62,8 @@ public class ElGamalCipherImplTest {
                 "Test message must be within the valid range [1, p-1]");
 
         // Encrypt the message using the public key
-        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+        EncryptionResult encryptionResult = elGamalCipher.encrypt(publicKey, message);
+        Ciphertext ciphertext = encryptionResult.getCiphertext();
         Assertions.assertNotNull(ciphertext, "Ciphertext should not be null");
         Assertions.assertNotNull(ciphertext.getC1(), "Ciphertext component c1 should not be null");
         Assertions.assertNotNull(ciphertext.getC2(), "Ciphertext component c2 should not be null");
@@ -86,7 +87,8 @@ public class ElGamalCipherImplTest {
         assertTrue(message.compareTo(BigInteger.ONE) >= 0 && message.compareTo(p) < 0,
                 "Test message must be within the valid range [1, p-1]");
 
-        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+        EncryptionResult encryptionResult = elGamalCipher.encrypt(publicKey, message);
+        Ciphertext ciphertext = encryptionResult.getCiphertext();
         assertNotNull(ciphertext);
 
         BigInteger decryptedMessage = elGamalCipher.decrypt(privateKey, ciphertext);
@@ -151,7 +153,8 @@ public class ElGamalCipherImplTest {
     void testDecrypt_NullPrivateKey() {
         // Need a valid ciphertext first
         BigInteger message = new BigInteger("10");
-        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+        EncryptionResult encryptionResult = elGamalCipher.encrypt(publicKey, message);
+        Ciphertext ciphertext = encryptionResult.getCiphertext();
 
         assertThrows(NullPointerException.class, () -> {
             elGamalCipher.decrypt(null, ciphertext);
@@ -203,7 +206,8 @@ public class ElGamalCipherImplTest {
     @Test
     void testDecrypt_WrongPrivateKey() {
         BigInteger message = new BigInteger("15");
-        Ciphertext ciphertext = elGamalCipher.encrypt(publicKey, message);
+        EncryptionResult encryptionResult = elGamalCipher.encrypt(publicKey, message);
+        Ciphertext ciphertext = encryptionResult.getCiphertext();
 
         // Create a different private key (x=7 instead of 6)
         BigInteger wrongX = new BigInteger("7");

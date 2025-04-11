@@ -6,6 +6,7 @@ import com.voteomatic.cryptography.core.zkp.Proof;
 import com.voteomatic.cryptography.core.zkp.Statement;
 import com.voteomatic.cryptography.core.zkp.ZkpException; // Needed for verifyVote
 
+import java.math.BigInteger; // Add import for BigInteger
 import java.util.List;
 
 /**
@@ -38,7 +39,7 @@ public interface VoteService {
      * @throws VotingException if tallying fails (e.g., decryption error, invalid votes).
      */
     // Note: Return type might need refinement based on specific ElGamal usage (e.g., summing BigIntegers)
-    Object tallyVotes(List<EncryptedVote> encryptedVotes, PrivateKey electionPrivateKey)
+    BigInteger tallyVotes(List<EncryptedVote> encryptedVotes, PrivateKey electionPrivateKey)
             throws VotingException;
 
     /**

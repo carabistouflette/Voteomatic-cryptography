@@ -32,6 +32,33 @@ public class Ciphertext {
         return c2;
     }
 
+    /**
+     * Multiplies this ciphertext with another ciphertext component-wise modulo p.
+     * This operation corresponds to the addition of the underlying plaintexts in ElGamal.
+     *
+     * @param other The other ciphertext to multiply with.
+     * @param p     The modulus from the public key parameters.
+     * @return A new Ciphertext representing the product.
+     * @throws NullPointerException if other or p is null, or if any ciphertext component is null.
+     */
+    public Ciphertext multiply(Ciphertext other, BigInteger p) {
+        Objects.requireNonNull(other, "Other ciphertext cannot be null");
+        Objects.requireNonNull(p, "Modulus p cannot be null");
+        Objects.requireNonNull(this.c1, "This ciphertext's c1 cannot be null");
+        Objects.requireNonNull(this.c2, "This ciphertext's c2 cannot be null");
+        Objects.requireNonNull(other.c1, "Other ciphertext's c1 cannot be null");
+        Objects.requireNonNull(other.c2, "Other ciphertext's c2 cannot be null");
+
+        if (p.compareTo(BigInteger.ONE) <= 0) {
+            throw new IllegalArgumentException("Modulus p must be greater than 1");
+        }
+
+        BigInteger newC1 = this.c1.multiply(other.c1).mod(p);
+        BigInteger newC2 = this.c2.multiply(other.c2).mod(p);
+
+        return new Ciphertext(newC1, newC2);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

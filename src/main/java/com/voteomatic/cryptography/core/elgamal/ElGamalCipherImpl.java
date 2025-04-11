@@ -1,5 +1,7 @@
 package com.voteomatic.cryptography.core.elgamal;
 
+import com.voteomatic.cryptography.core.elgamal.EncryptionResult; // Add import
+
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 
@@ -31,12 +33,12 @@ public class ElGamalCipherImpl implements ElGamalCipher {
      * @param publicKey The public key (p, g, y) to use for encryption. Must not be null.
      * @param message   The message to encrypt as a BigInteger. Must not be null.
      *                  The message must be representable within the group defined by p.
-     * @return The resulting Ciphertext (c1, c2).
+     * @return An EncryptionResult containing the Ciphertext (c1, c2) and the randomness k used.
      * @throws IllegalArgumentException if publicKey or message is null.
      * @throws ArithmeticException      if cryptographic computations encounter issues (e.g., invalid parameters).
      */
     @Override
-    public Ciphertext encrypt(PublicKey publicKey, BigInteger message) {
+    public EncryptionResult encrypt(PublicKey publicKey, BigInteger message) {
         Objects.requireNonNull(publicKey, "Public key cannot be null");
         Objects.requireNonNull(message, "Message cannot be null");
 
@@ -81,7 +83,8 @@ public class ElGamalCipherImpl implements ElGamalCipher {
         // Calculate c2 = m * s mod p
         BigInteger c2 = message.multiply(s).mod(p);
 
-        return new Ciphertext(c1, c2);
+        Ciphertext ciphertext = new Ciphertext(c1, c2);
+        return new EncryptionResult(ciphertext, k); // Return result with ciphertext and randomness k
     }
 
     /**

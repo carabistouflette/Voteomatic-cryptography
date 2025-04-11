@@ -6,11 +6,8 @@ import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.io.InMemoryKeyStorageHandler;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
-import com.voteomatic.cryptography.core.zkp.SchnorrProver;
-import com.voteomatic.cryptography.core.zkp.SchnorrVerifier;
-import com.voteomatic.cryptography.core.zkp.ZkpException; // Add missing import
-import com.voteomatic.cryptography.core.zkp.ZkpProver;
-import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
+// Import specific ZKP classes needed
+import com.voteomatic.cryptography.core.zkp.*;
 import com.voteomatic.cryptography.keymanagement.KeyManagementException;
 import com.voteomatic.cryptography.keymanagement.KeyPair;
 import com.voteomatic.cryptography.keymanagement.KeyService; // Add missing import
@@ -27,6 +24,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -43,8 +41,8 @@ public class EndToEndTest {
     private ElGamalCipher elGamalCipher;
     private KeyStorageHandler keyStorageHandler;
     private SecureRandomGenerator secureRandomGenerator;
-    private ZkpProver prover; // Should be SchnorrProver
-    private ZkpVerifier verifier; // Should be SchnorrVerifier
+    private ZkpProver prover; // Will be DisjunctiveChaumPedersenProver
+    private ZkpVerifier verifier; // Will be DisjunctiveChaumPedersenVerifier
     private HashAlgorithm hashAlgorithm;
 
 
@@ -53,8 +51,9 @@ public class EndToEndTest {
         keyStorageHandler = new InMemoryKeyStorageHandler();
         secureRandomGenerator = new SecureRandomGeneratorImpl();
         hashAlgorithm = new SHA256HashAlgorithm(); // Instantiate the hash algorithm
-        prover = new SchnorrProver(hashAlgorithm, secureRandomGenerator); // Pass both dependencies
-        verifier = new SchnorrVerifier(hashAlgorithm); // Pass hash algorithm
+        // Instantiate the new Disjunctive Chaum-Pedersen prover and verifier
+        prover = new DisjunctiveChaumPedersenProver(secureRandomGenerator, hashAlgorithm);
+        verifier = new DisjunctiveChaumPedersenVerifier(hashAlgorithm);
 
         // Instantiate services with all required dependencies
         keyService = new KeyServiceImpl(P, G, keyStorageHandler, secureRandomGenerator);
@@ -71,42 +70,55 @@ public class EndToEndTest {
         assertNotNull(publicKey, "Public key should not be null");
         assertNotNull(privateKey, "Private key should not be null");
 
-        // 2. Prepare Vote
-        String selectedOption = "candidate-42";
-        Vote originalVote = new Vote(selectedOption); // Use the correct constructor/method if different
+        // 2. Prepare Votes ("Yes" and "No")
+        Vote voteYes1 = new Vote("Yes");
+        Vote voteYes2 = new Vote("Yes");
+        Vote voteNo1 = new Vote("No");
 
-        // 3. Create Dummy Voter Credentials (using correct constructor)
-        VoterCredentials credentials = new VoterCredentials("test-voter");
+        // 3. Create Dummy Voter Credentials
+        VoterCredentials credentials1 = new VoterCredentials("voter1");
+        VoterCredentials credentials2 = new VoterCredentials("voter2");
+        VoterCredentials credentials3 = new VoterCredentials("voter3");
 
-        // 4. Cast Vote (Encrypt) using the correct service method
-        EncryptedVote encryptedVote = voteService.castVote(credentials, originalVote, publicKey);
-        assertNotNull(encryptedVote, "Encrypted vote should not be null");
-        assertNotNull(encryptedVote.getVoteCiphertext(), "Ciphertext within encrypted vote should not be null");
-        // Note: ZKP Proof might be null depending on castVote implementation
+        // 4. Cast Votes (Encrypt)
+        EncryptedVote encryptedVoteYes1 = voteService.castVote(credentials1, voteYes1, publicKey);
+        EncryptedVote encryptedVoteYes2 = voteService.castVote(credentials2, voteYes2, publicKey);
+        EncryptedVote encryptedVoteNo1 = voteService.castVote(credentials3, voteNo1, publicKey);
 
-        // 5. Decrypt Vote (Simulated Tally)
-        // Use getVoteCiphertext() and correct decrypt parameter order (privateKey, ciphertext)
-        BigInteger decryptedMessage = elGamalCipher.decrypt(privateKey, encryptedVote.getVoteCiphertext());
+        assertNotNull(encryptedVoteYes1);
+        assertNotNull(encryptedVoteYes2);
+        assertNotNull(encryptedVoteNo1);
+        assertNotNull(encryptedVoteYes1.getVoteCiphertext());
+        assertNotNull(encryptedVoteYes2.getVoteCiphertext());
+        assertNotNull(encryptedVoteNo1.getVoteCiphertext());
+        // Assert proofs are present
+        assertTrue(encryptedVoteYes1.getValidityProof().isPresent(), "Proof should be present for Yes vote 1");
+        assertTrue(encryptedVoteYes2.getValidityProof().isPresent(), "Proof should be present for Yes vote 2");
+        assertTrue(encryptedVoteNo1.getValidityProof().isPresent(), "Proof should be present for No vote 1");
 
-        // 6. Verify Decryption
-        // Convert original vote message (selected option) to BigInteger for comparison
-        // Use getSelectedOption()
-        BigInteger originalMessageBigInt = new BigInteger(1, originalVote.getSelectedOption().getBytes(StandardCharsets.UTF_8));
+        // 4.5 Verify Proofs (Optional but recommended in E2E)
+        BigInteger m0 = BigInteger.ONE; // g^0
+        BigInteger m1 = G;             // g^1
 
-        assertEquals(originalMessageBigInt, decryptedMessage, "Decrypted message should match the original vote's message");
+        // Verify Yes Vote 1
+        DisjunctiveChaumPedersenStatement stmtYes1 = new DisjunctiveChaumPedersenStatement(publicKey, encryptedVoteYes1.getVoteCiphertext(), m0, m1);
+        assertTrue(voteService.verifyVote(encryptedVoteYes1, stmtYes1, encryptedVoteYes1.getValidityProof().get()), "Proof for Yes vote 1 should be valid");
 
-        // Optional: Convert back to String to double-check
-        String decryptedCandidateId;
-        byte[] decryptedBytes = decryptedMessage.toByteArray();
-        // Handle potential leading zero byte added by BigInteger.toByteArray()
-        if (decryptedBytes.length > 1 && decryptedBytes[0] == 0) {
-             byte[] correctedBytes = new byte[decryptedBytes.length - 1];
-            System.arraycopy(decryptedBytes, 1, correctedBytes, 0, correctedBytes.length);
-            decryptedCandidateId = new String(correctedBytes, StandardCharsets.UTF_8);
-       } else {
-            decryptedCandidateId = new String(decryptedBytes, StandardCharsets.UTF_8);
-       }
+        // Verify Yes Vote 2
+        DisjunctiveChaumPedersenStatement stmtYes2 = new DisjunctiveChaumPedersenStatement(publicKey, encryptedVoteYes2.getVoteCiphertext(), m0, m1);
+        assertTrue(voteService.verifyVote(encryptedVoteYes2, stmtYes2, encryptedVoteYes2.getValidityProof().get()), "Proof for Yes vote 2 should be valid");
 
-        assertEquals(selectedOption, decryptedCandidateId, "Decrypted candidate ID string should match original");
+        // Verify No Vote 1
+        DisjunctiveChaumPedersenStatement stmtNo1 = new DisjunctiveChaumPedersenStatement(publicKey, encryptedVoteNo1.getVoteCiphertext(), m0, m1);
+        assertTrue(voteService.verifyVote(encryptedVoteNo1, stmtNo1, encryptedVoteNo1.getValidityProof().get()), "Proof for No vote 1 should be valid");
+
+        // 5. Tally Votes
+        List<EncryptedVote> allVotes = List.of(encryptedVoteYes1, encryptedVoteYes2, encryptedVoteNo1);
+        BigInteger tallyResult = voteService.tallyVotes(allVotes, privateKey);
+
+        // 6. Verify Tally Result
+        // Expected result is the count of "Yes" votes (k)
+        BigInteger expectedTally = BigInteger.TWO; // Two "Yes" votes
+        assertEquals(expectedTally, tallyResult, "Tally result should be the count of 'Yes' votes (k=2)");
     }
 }

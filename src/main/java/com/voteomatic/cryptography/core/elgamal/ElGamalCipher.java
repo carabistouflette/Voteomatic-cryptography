@@ -13,10 +13,10 @@ public interface ElGamalCipher {
      *
      * @param publicKey The recipient's public key.
      * @param message   The message to encrypt (represented as a BigInteger).
-     * @return The resulting Ciphertext.
+     * @return An EncryptionResult containing the Ciphertext and the randomness used.
      * @throws IllegalArgumentException if the key or message is invalid.
      */
-    Ciphertext encrypt(PublicKey publicKey, BigInteger message);
+    EncryptionResult encrypt(PublicKey publicKey, BigInteger message);
 
     /**
      * Decrypts a ciphertext using the recipient's ElGamal private key.
