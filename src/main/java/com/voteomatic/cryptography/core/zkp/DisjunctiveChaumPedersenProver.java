@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.core.zkp;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
@@ -33,8 +34,11 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
         DisjunctiveChaumPedersenStatement stmt = (DisjunctiveChaumPedersenStatement) statement;
         DisjunctiveChaumPedersenWitness wit = (DisjunctiveChaumPedersenWitness) witness;
 
-        BigInteger p = stmt.getP();
-        BigInteger g = stmt.getG();
+        // Retrieve parameters from the statement
+        DomainParameters params = stmt.getParams();
+        BigInteger p = params.getP();
+        BigInteger g = params.getG();
+        BigInteger q = params.getQ(); // Use the correct subgroup order q
         BigInteger h = stmt.getH();
         BigInteger c1 = stmt.getC1();
         BigInteger c2 = stmt.getC2();
@@ -43,9 +47,8 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
         BigInteger r = wit.getR(); // ElGamal randomness
         int v = wit.getV();       // Actual message index (0 or 1)
 
-        // Use p-1 as the order q for simplicity. In practice, use the actual group order if known (e.g., (p-1)/2 for safe primes).
-        BigInteger q = p.subtract(BigInteger.ONE);
-        BigInteger qMinusOne = q.subtract(BigInteger.ONE); // Upper bound for random generation [0, q-1] -> [1, q]
+        // Removed incorrect calculation: q = p - 1
+        // q is now correctly retrieved from DomainParameters
 
         try {
             BigInteger a0, b0, r0, c0, c; // Declare c here
@@ -53,6 +56,7 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
 
             if (v == 0) { // Real proof for m0, simulate for m1
                 // Simulate for v=1
+                // Generate random values in [0, q-1]
                 c1_challenge = randomGenerator.generateBigInteger(q); // Random challenge for simulated branch
                 r1 = randomGenerator.generateBigInteger(q);           // Random response for simulated branch
 
@@ -69,7 +73,7 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
                 b1 = h_pow_r1.multiply(c2_div_m1_pow_neg_c1).mod(p);
 
                 // Real proof for v=0
-                BigInteger w0 = randomGenerator.generateBigInteger(q); // Real random commitment value
+                BigInteger w0 = randomGenerator.generateBigInteger(q); // Real random commitment value in [0, q-1]
                 a0 = g.modPow(w0, p);
                 b0 = h.modPow(w0, p);
 
@@ -84,6 +88,7 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
 
             } else { // Real proof for m1, simulate for m0 (v == 1)
                 // Simulate for v=0
+                // Generate random values in [0, q-1]
                 c0 = randomGenerator.generateBigInteger(q); // Random challenge for simulated branch
                 r0 = randomGenerator.generateBigInteger(q); // Random response for simulated branch
 
@@ -100,7 +105,7 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
                 b0 = h_pow_r0.multiply(c2_div_m0_pow_neg_c0).mod(p);
 
                 // Real proof for v=1
-                BigInteger w1 = randomGenerator.generateBigInteger(q); // Real random commitment value
+                BigInteger w1 = randomGenerator.generateBigInteger(q); // Real random commitment value in [0, q-1]
                 a1 = g.modPow(w1, p);
                 b1 = h.modPow(w1, p);
 

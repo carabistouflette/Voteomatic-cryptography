@@ -1,40 +1,60 @@
 package com.voteomatic.cryptography.core.elgamal;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
+
 import java.math.BigInteger;
 import java.util.Objects;
 
 /**
  * Represents an ElGamal public key.
- * Contains the public parameters (p, g) and the public value y = g^x mod p.
+ * Contains the domain parameters and the public value y = g^x mod p.
  */
 public class PublicKey {
-    private final BigInteger p; // Prime modulus
-    private final BigInteger g; // Generator
-    private final BigInteger y; // Public value (g^x mod p)
+    private final DomainParameters params; // Domain parameters (p, g, q)
+    private final BigInteger y;          // Public value (g^x mod p)
 
     /**
      * Constructs an ElGamal PublicKey.
      *
-     * @param p The prime modulus. Must be non-null.
-     * @param g The generator. Must be non-null.
-     * @param y The public value y. Must be non-null.
+     * @param params The domain parameters (p, g, q). Must be non-null.
+     * @param y      The public value y = g^x mod p. Must be non-null.
      */
-    public PublicKey(BigInteger p, BigInteger g, BigInteger y) {
-        Objects.requireNonNull(p, "Prime modulus p cannot be null");
-        Objects.requireNonNull(g, "Generator g cannot be null");
-        Objects.requireNonNull(y, "Public value y cannot be null");
-        // Basic validation could be added here (e.g., check if p is prime, g is generator)
-        this.p = p;
-        this.g = g;
-        this.y = y;
+    public PublicKey(DomainParameters params, BigInteger y) {
+        this.params = Objects.requireNonNull(params, "DomainParameters cannot be null");
+        this.y = Objects.requireNonNull(y, "Public value y cannot be null");
+        // Basic validation could be added here (e.g., check if y is in the correct range/subgroup)
     }
 
+    /**
+     * Gets the prime modulus p from the domain parameters.
+     * @return The prime modulus p.
+     */
     public BigInteger getP() {
-        return p;
+        return params.getP();
     }
 
+    /**
+     * Gets the generator g from the domain parameters.
+     * @return The generator g.
+     */
     public BigInteger getG() {
-        return g;
+        return params.getG();
+    }
+
+    /**
+     * Gets the prime subgroup order q from the domain parameters.
+     * @return The prime subgroup order q.
+     */
+    public BigInteger getQ() {
+        return params.getQ();
+    }
+
+    /**
+     * Gets the full domain parameters object.
+     * @return The DomainParameters object containing p, g, and q.
+     */
+    public DomainParameters getParams() {
+        return params;
     }
 
     public BigInteger getY() {
@@ -46,19 +66,19 @@ public class PublicKey {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         PublicKey publicKey = (PublicKey) o;
-        return p.equals(publicKey.p) && g.equals(publicKey.g) && y.equals(publicKey.y);
+        return params.equals(publicKey.params) && y.equals(publicKey.y);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(p, g, y);
+        return Objects.hash(params, y);
     }
 
     @Override
     public String toString() {
+        // Delegate parameter details to DomainParameters.toString()
         return "PublicKey{" +
-               "p=" + p +
-               ", g=" + g +
+               "params=" + params +
                ", y=" + y +
                '}';
     }

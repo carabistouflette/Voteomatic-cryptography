@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.keymanagement;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,20 +18,24 @@ class KeyPairTest {
 
     @BeforeEach
     void setUp() {
-        BigInteger p1 = new BigInteger("23");
-        BigInteger g1 = new BigInteger("5");
-        BigInteger x1 = new BigInteger("6");
-        BigInteger y1 = new BigInteger("8"); // g1^x1 mod p1
+        BigInteger p1_val = new BigInteger("23");
+        BigInteger g1_val = new BigInteger("5");
+        BigInteger q1_val = p1_val.subtract(BigInteger.ONE).divide(BigInteger.TWO); // q = 11
+        DomainParameters params1 = new DomainParameters(p1_val, g1_val, q1_val);
+        BigInteger x1_val = new BigInteger("6");
+        BigInteger y1_val = g1_val.modPow(x1_val, p1_val); // 8
 
-        BigInteger p2 = new BigInteger("29"); // Different params
-        BigInteger g2 = new BigInteger("2");
-        BigInteger x2 = new BigInteger("7");
-        BigInteger y2 = new BigInteger("12"); // g2^x2 mod p2 (2^7 = 128 mod 29 = 12)
+        BigInteger p2_val = new BigInteger("29"); // Different params
+        BigInteger g2_val = new BigInteger("2");
+        BigInteger q2_val = p2_val.subtract(BigInteger.ONE).divide(BigInteger.TWO); // q = 14 (Note: 29 is not safe prime, but q=(p-1)/2 is used)
+        DomainParameters params2 = new DomainParameters(p2_val, g2_val, q2_val);
+        BigInteger x2_val = new BigInteger("7");
+        BigInteger y2_val = g2_val.modPow(x2_val, p2_val); // 12
 
-        publicKey1 = new PublicKey(p1, g1, y1);
-        privateKey1 = new PrivateKey(p1, g1, x1);
-        publicKey2 = new PublicKey(p2, g2, y2); // Different key
-        privateKey2 = new PrivateKey(p2, g2, x2); // Different key
+        publicKey1 = new PublicKey(params1, y1_val);
+        privateKey1 = new PrivateKey(params1, x1_val);
+        publicKey2 = new PublicKey(params2, y2_val); // Different key
+        privateKey2 = new PrivateKey(params2, x2_val); // Different key
 
         keyPair1 = new KeyPair(publicKey1, privateKey1);
     }

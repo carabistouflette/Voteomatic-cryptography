@@ -1,8 +1,10 @@
 package com.voteomatic.cryptography.core.zkp;
 
+import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
+import com.voteomatic.cryptography.securityutils.SecureRandomGenerator; // Added
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,17 +22,19 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class DisjunctiveChaumPedersenVerifierTest {
 
-    @Mock
-    private HashAlgorithm hashAlgorithm;
+    @Mock private HashAlgorithm hashAlgorithm;
+    @Mock private SecureRandomGenerator randomGenerator; // Added mock for prover
 
-    @InjectMocks
-    private DisjunctiveChaumPedersenVerifier verifier;
+    private DisjunctiveChaumPedersenProver prover; // Instantiate prover for generating valid proof
+    @InjectMocks private DisjunctiveChaumPedersenVerifier verifier;
 
     // Consistent crypto parameters from ProverTest
-    private final BigInteger p = BigInteger.valueOf(23);
-    private final BigInteger g = BigInteger.valueOf(5);
-    private final BigInteger h = BigInteger.valueOf(8); // y = g^x mod p = 5^6 mod 23 = 8
-    private final BigInteger q = p.subtract(BigInteger.ONE); // Order = 22
+    private final BigInteger p_val = BigInteger.valueOf(23);
+    private final BigInteger g_val = BigInteger.valueOf(5);
+    private final BigInteger q_val = p_val.subtract(BigInteger.ONE).divide(BigInteger.TWO); // Prime subgroup order q = 11
+    private final BigInteger r_val = BigInteger.valueOf(7); // Original randomness for ciphertext
+    private final DomainParameters domainParams = new DomainParameters(p_val, g_val, q_val);
+    private final BigInteger h_val = g_val.modPow(BigInteger.valueOf(6), p_val); // y = g^x mod p = 5^6 mod 23 = 8
 
     private PublicKey publicKey;
     private BigInteger m0;
@@ -38,33 +42,47 @@ class DisjunctiveChaumPedersenVerifierTest {
     private Ciphertext ciphertext; // Use ciphertext0 from prover test
     private DisjunctiveChaumPedersenStatement statement;
 
-    // Valid proof components corresponding to v=0 case from ProverTest (Recalculated with h=8)
-    private final BigInteger a0_valid = BigInteger.valueOf(10); // g^w0
-    private final BigInteger b0_valid = BigInteger.valueOf(6);  // h^w0 = 8^3 = 6
-    private final BigInteger c0_valid = BigInteger.valueOf(3);  // c - c1'
-    private final BigInteger r0_valid = BigInteger.valueOf(2);  // w0 + c0*r
-    private final BigInteger a1_valid = BigInteger.valueOf(6);  // Adjusted to make check1_eq1 pass: g^r1 = 13, c1^c1 = 6 -> a1 = 13*6^-1 = 13*4 = 52 = 6
-    private final BigInteger b1_valid = BigInteger.valueOf(9);  // Simulated b1 = h^r1*(c2/m1)^(-c1) = 8^14*(12*14)^(-12) = 6*7^(-12) = 6*13=78=9
-    private final BigInteger c1_valid = BigInteger.valueOf(12); // Simulated c1'
-    private final BigInteger r1_valid = BigInteger.valueOf(14); // Simulated r1'
-
+    // Proof will be generated in setUp using the prover
     private DisjunctiveChaumPedersenProof validProof;
+    private DisjunctiveChaumPedersenWitness witness0; // Witness for v=0
 
     // Mocked hash result corresponding to the valid proof components
-    private final BigInteger mockChallengeHash = BigInteger.valueOf(15); // H(...) mod q = 15
+    // Mocked values needed for prover to generate the proof
+    private final BigInteger mockW0 = BigInteger.valueOf(3);
+    private final BigInteger mockSimulatedC1 = BigInteger.valueOf(12);
+    private final BigInteger mockSimulatedR1 = BigInteger.valueOf(14);
+    private final BigInteger mockProverChallengeHashBytes = BigInteger.valueOf(15); // Raw hash result H(...) = 15
 
     @BeforeEach
-    void setUp() throws SecurityUtilException {
-        publicKey = new PublicKey(p, g, h);
+    void setUp() throws SecurityUtilException, ZkpException { // Added ZkpException
+        prover = new DisjunctiveChaumPedersenProver(randomGenerator, hashAlgorithm); // Instantiate prover
+        publicKey = new PublicKey(domainParams, h_val);
         m0 = BigInteger.ONE;
-        m1 = g; // 5
-        // Use ciphertext corresponding to m0 encryption (Recalculated with h=8)
-        BigInteger c1_val = BigInteger.valueOf(17); // g^r (r=7)
-        BigInteger c2_val = BigInteger.valueOf(12); // m0*h^r = 1 * 8^7 = 12
+        m1 = domainParams.getG(); // 5
+        // Ciphertext corresponding to m0 encryption with r=7
+        BigInteger c1_val = domainParams.getG().modPow(r_val, domainParams.getP()); // 5^7 mod 23 = 17
+        BigInteger c2_val = m0.multiply(h_val.modPow(r_val, domainParams.getP())).mod(domainParams.getP()); // 1 * 8^7 mod 23 = 12
         ciphertext = new Ciphertext(c1_val, c2_val); // (17, 12)
         statement = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext, m0, m1);
+        witness0 = new DisjunctiveChaumPedersenWitness(r_val, 0); // Witness for v=0
 
-        validProof = new DisjunctiveChaumPedersenProof(a0_valid, b0_valid, c0_valid, r0_valid, a1_valid, b1_valid, c1_valid, r1_valid);
+        // --- Generate the valid proof using the prover ---
+        // Mock random numbers needed for prover (v=0 case)
+        when(randomGenerator.generateBigInteger(domainParams.getQ()))
+            .thenReturn(mockSimulatedC1) // c1' (simulated challenge)
+            .thenReturn(mockSimulatedR1) // r1' (simulated response)
+            .thenReturn(mockW0);         // w0 (real commitment random)
+        // Mock hash result needed for prover
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
+
+        // Generate the proof
+        validProof = (DisjunctiveChaumPedersenProof) prover.generateProof(statement, witness0);
+
+        // Reset hash mock for verifier tests (important!)
+        // The verifier will call hash again, potentially with different input bytes
+        // if the concatenation logic differs slightly (though it shouldn't).
+        // We mock it again in the specific tests that need verification.
+        reset(hashAlgorithm);
     }
 
     @Test
@@ -86,21 +104,25 @@ class DisjunctiveChaumPedersenVerifierTest {
 
     @Test
     void verifyProof_validProof_returnsTrue() throws ZkpException, SecurityUtilException {
-        // Mock hash calculation for this test
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
-        assertTrue(verifier.verifyProof(statement, validProof));
-        // Verify hash was called once
+        // Mock hash calculation for the verifier for this specific test
+        // It should produce the same hash value as the prover used
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
+
+        // Act & Assert
+        assertTrue(verifier.verifyProof(statement, validProof), "Verification should succeed for a proof generated by the prover.");
+
+        // Verify hash was called once by the verifier during this call
         verify(hashAlgorithm, times(1)).hash(any(byte[].class));
     }
 
     @Test
     void verifyProof_challengeCheckFails_returnsFalse() throws ZkpException, SecurityUtilException {
-        // Mock hash calculation for this test (verifier needs it to compare challenges)
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
-        // Tamper with c0 so c0 + c1 != calculated_c
+        // Mock hash calculation for the verifier
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
+        // Tamper with c0 from the generated valid proof
         DisjunctiveChaumPedersenProof badProof = new DisjunctiveChaumPedersenProof(
-            a0_valid, b0_valid, c0_valid.add(BigInteger.ONE), r0_valid, // Bad c0
-            a1_valid, b1_valid, c1_valid, r1_valid
+            validProof.getA0(), validProof.getB0(), validProof.getC0().add(BigInteger.ONE), validProof.getR0(), // Bad c0
+            validProof.getA1(), validProof.getB1(), validProof.getC1(), validProof.getR1()
         );
         assertFalse(verifier.verifyProof(statement, badProof));
         // Hash should still be calculated once
@@ -109,48 +131,48 @@ class DisjunctiveChaumPedersenVerifierTest {
 
      @Test
     void verifyProof_check0Eq1Fails_returnsFalse() throws ZkpException, SecurityUtilException {
-        // Mock hash calculation for this test
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
+        // Mock hash calculation for the verifier
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
         // Tamper with a0 so g^r0 != a0 * c1^c0
          DisjunctiveChaumPedersenProof badProof = new DisjunctiveChaumPedersenProof(
-            a0_valid.add(BigInteger.ONE), b0_valid, c0_valid, r0_valid, // Bad a0
-            a1_valid, b1_valid, c1_valid, r1_valid
+            validProof.getA0().add(BigInteger.ONE), validProof.getB0(), validProof.getC0(), validProof.getR0(), // Bad a0
+            validProof.getA1(), validProof.getB1(), validProof.getC1(), validProof.getR1()
         );
         assertFalse(verifier.verifyProof(statement, badProof));
     }
 
      @Test
     void verifyProof_check0Eq2Fails_returnsFalse() throws ZkpException, SecurityUtilException {
-        // Mock hash calculation for this test
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
+        // Mock hash calculation for the verifier
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
         // Tamper with b0 so h^r0 != b0 * (c2/m0)^c0
          DisjunctiveChaumPedersenProof badProof = new DisjunctiveChaumPedersenProof(
-            a0_valid, b0_valid.add(BigInteger.ONE), c0_valid, r0_valid, // Bad b0
-            a1_valid, b1_valid, c1_valid, r1_valid
+            validProof.getA0(), validProof.getB0().add(BigInteger.ONE), validProof.getC0(), validProof.getR0(), // Bad b0
+            validProof.getA1(), validProof.getB1(), validProof.getC1(), validProof.getR1()
         );
         assertFalse(verifier.verifyProof(statement, badProof));
     }
 
      @Test
     void verifyProof_check1Eq1Fails_returnsFalse() throws ZkpException, SecurityUtilException {
-        // Mock hash calculation for this test
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
+        // Mock hash calculation for the verifier
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
         // Tamper with a1 so g^r1 != a1 * c1^c1
          DisjunctiveChaumPedersenProof badProof = new DisjunctiveChaumPedersenProof(
-            a0_valid, b0_valid, c0_valid, r0_valid,
-            a1_valid.add(BigInteger.ONE), b1_valid, c1_valid, r1_valid // Bad a1
+            validProof.getA0(), validProof.getB0(), validProof.getC0(), validProof.getR0(),
+            validProof.getA1().add(BigInteger.ONE), validProof.getB1(), validProof.getC1(), validProof.getR1() // Bad a1
         );
         assertFalse(verifier.verifyProof(statement, badProof));
     }
 
      @Test
     void verifyProof_check1Eq2Fails_returnsFalse() throws ZkpException, SecurityUtilException {
-        // Mock hash calculation for this test
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
+        // Mock hash calculation for the verifier
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
         // Tamper with b1 so h^r1 != b1 * (c2/m1)^c1
          DisjunctiveChaumPedersenProof badProof = new DisjunctiveChaumPedersenProof(
-            a0_valid, b0_valid, c0_valid, r0_valid,
-            a1_valid, b1_valid.add(BigInteger.ONE), c1_valid, r1_valid // Bad b1
+            validProof.getA0(), validProof.getB0(), validProof.getC0(), validProof.getR0(),
+            validProof.getA1(), validProof.getB1().add(BigInteger.ONE), validProof.getC1(), validProof.getR1() // Bad b1
         );
         assertFalse(verifier.verifyProof(statement, badProof));
     }
@@ -171,10 +193,10 @@ class DisjunctiveChaumPedersenVerifierTest {
      @Test
     void verifyProof_modInverseThrowsArithmeticException_returnsFalse() throws ZkpException, SecurityUtilException {
         // Mock hash calculation for this test (needed before modInverse is called)
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
          // Create a statement where m0 is not invertible mod p
-         BigInteger bad_m0 = p;
-         DisjunctiveChaumPedersenStatement badStatement = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext, bad_m0, m1);
+         BigInteger bad_m0 = domainParams.getP();
+         DisjunctiveChaumPedersenStatement badStatement = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext, bad_m0, m1); // m0=p
 
          // The current implementation catches ArithmeticException and returns false
          assertFalse(verifier.verifyProof(badStatement, validProof));
@@ -182,16 +204,15 @@ class DisjunctiveChaumPedersenVerifierTest {
 
      @Test
     void calculateChallenge_matchesProverLogic() throws Exception {
-        // Mock hash calculation for this test
-        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
-         // This test is implicitly covered by the successful verification test,
-         // but we can explicitly call the private method using reflection if needed
-         // for more isolated testing (though generally testing via public API is preferred).
+        // Mock hash calculation for the verifier
+        when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockProverChallengeHashBytes.toByteArray());
 
-         // We rely on the fact that if verifyProof passes with mocked hash,
-         // the internal calculateChallenge must be producing the expected input
-         // for the mocked hash function.
-         assertTrue(verifier.verifyProof(statement, validProof)); // Re-run for clarity
-         verify(hashAlgorithm, times(1)).hash(any(byte[].class)); // Confirms challenge calculation happened
+        // Act & Assert
+        // We rely on the fact that if verifyProof passes with mocked hash,
+        // the internal calculateChallenge must be producing the expected input
+        // for the mocked hash function.
+        assertTrue(verifier.verifyProof(statement, validProof), "Verification should pass, implying challenge calculation matches.");
+        // Verify hash was called once by the verifier during this call
+        verify(hashAlgorithm, times(1)).hash(any(byte[].class));
     }
 }

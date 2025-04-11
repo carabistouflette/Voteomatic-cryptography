@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.keymanagement;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.io.DataHandlingException;
@@ -43,8 +44,10 @@ class KeyServiceImplTest {
     private KeyService keyService;
     private SecureRandomGenerator secureRandomGenerator;
     private static final BigInteger P = new BigInteger("23"); // Small prime for faster tests
-    private static final BigInteger G = new BigInteger("5");  // Generator for P=23
-    // Suffixes no longer needed
+    // G must be a generator of the subgroup of order Q. For P=23, Q=11, g=4 is a generator (4^11 mod 23 = 1)
+    private static final BigInteger G = new BigInteger("4");
+    private static final BigInteger Q = P.subtract(BigInteger.ONE).divide(BigInteger.TWO); // Q = (P-1)/2 = 11
+    private static final DomainParameters DOMAIN_PARAMS = new DomainParameters(P, G, Q);
     private static final char[] TEST_PASSWORD = "testpassword".toCharArray();
 
     @Mock
@@ -60,7 +63,7 @@ class KeyServiceImplTest {
         // BC provider is now registered in the static initializer block above.
         secureRandomGenerator = new SecureRandomGeneratorImpl();
         // Instantiate service with the MOCK handler
-        keyService = new KeyServiceImpl(P, G, keyStorageHandler, secureRandomGenerator);
+        keyService = new KeyServiceImpl(DOMAIN_PARAMS, keyStorageHandler, secureRandomGenerator);
     }
 
     // No tearDown needed for mock handler
@@ -77,20 +80,24 @@ class KeyServiceImplTest {
         com.voteomatic.cryptography.core.elgamal.PublicKey publicKey = keyPair.getPublicKey();
         com.voteomatic.cryptography.core.elgamal.PrivateKey privateKey = keyPair.getPrivateKey();
 
-        assertEquals(P, publicKey.getP());
-        assertEquals(G, publicKey.getG());
-        assertEquals(P, privateKey.getP());
-        assertEquals(G, privateKey.getG());
+        assertEquals(DOMAIN_PARAMS, publicKey.getParams());
+        assertEquals(DOMAIN_PARAMS, privateKey.getParams());
+        // Or check individual components if needed:
+        // assertEquals(P, publicKey.getDomainParameters().getP());
+        // assertEquals(G, publicKey.getDomainParameters().getG());
+        // assertEquals(P, privateKey.getDomainParameters().getP());
+        // assertEquals(G, privateKey.getDomainParameters().getG());
         // Basic check: y = g^x mod p
-        assertEquals(publicKey.getY(), G.modPow(privateKey.getX(), P));
+        assertEquals(publicKey.getY(), DOMAIN_PARAMS.getG().modPow(privateKey.getX(), DOMAIN_PARAMS.getP()));
     }
 
     // Helper to create a JCE KeyPair (java.security.KeyPair) for mocking return values
     private java.security.KeyPair createMockJceKeyPair(com.voteomatic.cryptography.keymanagement.KeyPair voteomaticKeyPair) throws Exception {
         // This mimics the conversion logic in KeyServiceImpl for test setup
         java.security.KeyFactory keyFactory = java.security.KeyFactory.getInstance("DiffieHellman"); // Use DH as fallback
-        DHPublicKeySpec pubSpec = new DHPublicKeySpec(voteomaticKeyPair.getPublicKey().getY(), P, G);
-        DHPrivateKeySpec privSpec = new DHPrivateKeySpec(voteomaticKeyPair.getPrivateKey().getX(), P, G);
+        DomainParameters params = voteomaticKeyPair.getPublicKey().getParams(); // Get params from key
+        DHPublicKeySpec pubSpec = new DHPublicKeySpec(voteomaticKeyPair.getPublicKey().getY(), params.getP(), params.getG());
+        DHPrivateKeySpec privSpec = new DHPrivateKeySpec(voteomaticKeyPair.getPrivateKey().getX(), params.getP(), params.getG());
         java.security.PublicKey jcePub = keyFactory.generatePublic(pubSpec);
         java.security.PrivateKey jcePriv = keyFactory.generatePrivate(privSpec);
         return new java.security.KeyPair(jcePub, jcePriv);
@@ -121,9 +128,9 @@ class KeyServiceImplTest {
         assertTrue(capturedJceKeyPair.getPrivate() instanceof javax.crypto.interfaces.DHPrivateKey);
         assertEquals(keyPair.getPublicKey().getY(), ((DHPublicKey) capturedJceKeyPair.getPublic()).getY());
         assertEquals(keyPair.getPrivateKey().getX(), ((javax.crypto.interfaces.DHPrivateKey) capturedJceKeyPair.getPrivate()).getX());
-        DHParameterSpec params = ((DHPublicKey) capturedJceKeyPair.getPublic()).getParams();
-        assertEquals(P, params.getP());
-        assertEquals(G, params.getG());
+        DHParameterSpec capturedParams = ((DHPublicKey) capturedJceKeyPair.getPublic()).getParams();
+        assertEquals(DOMAIN_PARAMS.getP(), capturedParams.getP());
+        assertEquals(DOMAIN_PARAMS.getG(), capturedParams.getG());
 
         // Assert captured certificate is not null (content check is complex)
         assertNotNull(certificateCaptor.getValue());
@@ -180,25 +187,25 @@ class KeyServiceImplTest {
     @Test
     void testConstructor_NullP() {
         assertThrows(NullPointerException.class, () -> 
-            new KeyServiceImpl(null, G, keyStorageHandler, secureRandomGenerator));
+            new KeyServiceImpl(null, keyStorageHandler, secureRandomGenerator)); // Pass null DomainParameters
     }
 
     @Test
     void testConstructor_NullG() {
         assertThrows(NullPointerException.class, () -> 
-            new KeyServiceImpl(P, null, keyStorageHandler, secureRandomGenerator));
+            new KeyServiceImpl(null, keyStorageHandler, secureRandomGenerator)); // Pass null DomainParameters (covers null G implicitly)
     }
 
     @Test
     void testConstructor_NullStorageHandler() {
-        assertThrows(NullPointerException.class, () -> 
-            new KeyServiceImpl(P, G, null, secureRandomGenerator));
+        assertThrows(NullPointerException.class, () ->
+            new KeyServiceImpl(DOMAIN_PARAMS, null, secureRandomGenerator));
     }
 
     @Test
     void testConstructor_NullRandomGenerator() {
-        assertThrows(NullPointerException.class, () -> 
-            new KeyServiceImpl(P, G, keyStorageHandler, null));
+        assertThrows(NullPointerException.class, () ->
+            new KeyServiceImpl(DOMAIN_PARAMS, keyStorageHandler, null));
     }
     @Test
     void testGetPublicKey_Success() throws Exception {
@@ -207,7 +214,7 @@ class KeyServiceImplTest {
         String identifier = "test-public-key";
         // Create the expected JCE PublicKey (java.security.PublicKey) that the handler should return
         java.security.KeyFactory keyFactory = java.security.KeyFactory.getInstance("DiffieHellman");
-        DHPublicKeySpec pubSpec = new DHPublicKeySpec(keyPair.getPublicKey().getY(), P, G);
+        DHPublicKeySpec pubSpec = new DHPublicKeySpec(keyPair.getPublicKey().getY(), DOMAIN_PARAMS.getP(), DOMAIN_PARAMS.getG());
         java.security.PublicKey mockJcePublicKey = keyFactory.generatePublic(pubSpec);
 
         // Mocking: Return the mock JCE PublicKey when getPublicKey is called
@@ -275,9 +282,14 @@ class KeyServiceImplTest {
             // Use the custom KeyPair type
             com.voteomatic.cryptography.keymanagement.KeyPair keyPair = keyService.generateKeyPair();
             // Create a modified public key with invalid parameters
+        // Create DomainParameters with modified P for the invalid key
+        DomainParameters invalidParams = new DomainParameters(
+            DOMAIN_PARAMS.getP().add(BigInteger.ONE), // Modified p
+            DOMAIN_PARAMS.getG(),
+            DOMAIN_PARAMS.getQ() // Q might not be correct for modified P, but test checks P/G mismatch
+        );
         com.voteomatic.cryptography.core.elgamal.PublicKey invalidKey = new com.voteomatic.cryptography.core.elgamal.PublicKey(
-                keyPair.getPublicKey().getP().add(BigInteger.ONE), // Modified p
-                keyPair.getPublicKey().getG(),
+                invalidParams,
                 keyPair.getPublicKey().getY()
         );
         assertFalse(keyService.verifyKeyIntegrity(invalidKey));
@@ -331,12 +343,17 @@ class KeyServiceImplTest {
             // Use the custom KeyPair type
             com.voteomatic.cryptography.keymanagement.KeyPair keyPair = keyService.generateKeyPair();
             // Create a key pair with different parameters than the service instance
+            // Create different DomainParameters
+            DomainParameters differentParams = new DomainParameters(
+                P.add(BigInteger.ONE), // Different p
+                G,
+                Q // Q might not be correct, but test checks P/G mismatch
+            );
             KeyService differentService = new KeyServiceImpl(
-                P.add(BigInteger.ONE), // Different p - Use a different P for this service
-               G,
+               differentParams,
                keyStorageHandler, // Use the mock handler
                secureRandomGenerator
-           );
+            );
            // Pass the custom KeyPair type
            assertThrows(KeyManagementException.class, () ->
                differentService.storeKeyPair(keyPair, "test-id", TEST_PASSWORD));
@@ -348,9 +365,14 @@ class KeyServiceImplTest {
     @Test
     void testGenerateKeyPair_SmallP() {
         // Test with p=2 which should fail
-        KeyService smallKeyService = new KeyServiceImpl(
+        // Create DomainParameters with small P
+        DomainParameters smallParams = new DomainParameters(
             BigInteger.valueOf(2),
-            G, // Use the same G
+            G,
+            BigInteger.ZERO // Q is irrelevant here as P=2 is invalid
+        );
+        KeyService smallKeyService = new KeyServiceImpl(
+            smallParams,
             keyStorageHandler, // Use the same handler
             secureRandomGenerator
         );
@@ -418,25 +440,26 @@ class KeyServiceImplTest {
 
     @Test
     void testVerifyKeyIntegrity_MismatchedG() throws KeyManagementException {
-        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(P, G.add(BigInteger.ONE), BigInteger.TEN);
+        DomainParameters mismatchedGParams = new DomainParameters(P, G.add(BigInteger.ONE), Q);
+        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(mismatchedGParams, BigInteger.TEN);
         assertFalse(keyService.verifyKeyIntegrity(key));
     }
 
     @Test
     void testVerifyKeyIntegrity_YLessThanOne() throws KeyManagementException {
-        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(P, G, BigInteger.ZERO);
+        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(DOMAIN_PARAMS, BigInteger.ZERO);
         assertFalse(keyService.verifyKeyIntegrity(key));
     }
 
     @Test
     void testVerifyKeyIntegrity_YEqualsP() throws KeyManagementException {
-        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(P, G, P);
+        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(DOMAIN_PARAMS, P);
         assertFalse(keyService.verifyKeyIntegrity(key));
     }
 
     @Test
     void testVerifyKeyIntegrity_YGreaterThanP() throws KeyManagementException {
-        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(P, G, P.add(BigInteger.ONE));
+        com.voteomatic.cryptography.core.elgamal.PublicKey key = new com.voteomatic.cryptography.core.elgamal.PublicKey(DOMAIN_PARAMS, P.add(BigInteger.ONE));
         assertFalse(keyService.verifyKeyIntegrity(key));
     }
 

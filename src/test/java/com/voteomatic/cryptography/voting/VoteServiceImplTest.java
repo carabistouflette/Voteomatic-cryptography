@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.voting;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.*; // Import EncryptionResult etc.
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
@@ -57,25 +58,25 @@ class VoteServiceImplTest {
     private DisjunctiveChaumPedersenStatement mockDcpStatement;
     private DisjunctiveChaumPedersenProof mockDcpProof;
     private BigInteger mockRandomness; // To store the mocked randomness 'r'
-    private BigInteger p; // Prime modulus from public key
-    private BigInteger g; // Generator from public key
-
+    // p, g, q are now part of domainParams
+    private DomainParameters domainParams;
     @BeforeEach
     void setUp() {
         // Initialize common test data
         // Use larger ElGamal parameters suitable for vote encoding
         // Example 128-bit prime and generator g=2
-        p = new BigInteger("340282366920938463463374607431768211507"); // 128-bit prime
-        BigInteger g = new BigInteger("2");  // Common generator candidate
-        BigInteger x = new BigInteger("198765432109876543210987654321"); // Example private key < p
-        BigInteger y = g.modPow(x, p); // y = g^x mod p
+        BigInteger p_val = new BigInteger("340282366920938463463374607431768211507"); // 128-bit prime
+        BigInteger g_val = new BigInteger("2");  // Common generator candidate
+        // Assuming p is a safe prime, q = (p-1)/2
+        BigInteger q_val = p_val.subtract(BigInteger.ONE).divide(BigInteger.TWO);
+        domainParams = new DomainParameters(p_val, g_val, q_val);
 
-        this.g = g; // Store g for use in tests
-        samplePublicKey = new PublicKey(p, g, y);
-        // Mock the private key to return p and g when needed by tallyVotes
+        BigInteger x = new BigInteger("198765432109876543210987654321"); // Example private key < q
+        BigInteger y = domainParams.getG().modPow(x, domainParams.getP()); // y = g^x mod p
+        samplePublicKey = new PublicKey(domainParams, y);
+        // Mock the private key to return DomainParameters and x
         samplePrivateKey = mock(PrivateKey.class);
-        lenient().when(samplePrivateKey.getP()).thenReturn(p);
-        lenient().when(samplePrivateKey.getG()).thenReturn(g); // Might be needed if decrypt uses g
+        lenient().when(samplePrivateKey.getParams()).thenReturn(domainParams); // Mock getParams()
         lenient().when(samplePrivateKey.getX()).thenReturn(x); // Needed for actual decryption mock
         sampleVote = new Vote("Yes"); // Use "Yes" for the standard sample vote
         // voteWithNullOption = new Vote(null); // Moved instantiation to specific test
@@ -133,7 +134,7 @@ class VoteServiceImplTest {
     void testCastVote_Success() throws VotingException, ZkpException { // Add ZkpException
         // Arrange
         // Expected encoded message for "Yes" is g^1 = g
-        BigInteger expectedMessage = g;
+        BigInteger expectedMessage = domainParams.getG();
 
         Ciphertext expectedCiphertext = new Ciphertext(BigInteger.valueOf(123), BigInteger.valueOf(456)); // Dummy ciphertext
 
@@ -158,7 +159,7 @@ class VoteServiceImplTest {
         assertEquals(mockDcpProof, encryptedVote.getValidityProof().get(), "Proof should match the mocked proof");
 
         // Verify interaction with the encoded message (g)
-        verify(elGamalCipher, times(1)).encrypt(eq(samplePublicKey), eq(expectedMessage));
+        verify(elGamalCipher, times(1)).encrypt(eq(samplePublicKey), eq(domainParams.getG()));
         // Verify prover was called
         verify(prover, times(1)).generateProof(any(DisjunctiveChaumPedersenStatement.class), any(DisjunctiveChaumPedersenWitness.class));
     }
@@ -286,8 +287,8 @@ class VoteServiceImplTest {
         // C1 = (g^k, m1 * y^k) = (g^1, g^1 * y^1) = (g, g*y)
         // C2 = (g^k, m2 * y^k) = (g^1, g^0 * y^1) = (g, 1*y) = (g, y)
         BigInteger y = samplePublicKey.getY();
-        Ciphertext ct1 = new Ciphertext(g.mod(p), g.multiply(y).mod(p)); // Represents m1=g^1
-        Ciphertext ct2 = new Ciphertext(g.mod(p), y.mod(p));             // Represents m2=g^0=1
+        Ciphertext ct1 = new Ciphertext(domainParams.getG().mod(domainParams.getP()), domainParams.getG().multiply(y).mod(domainParams.getP())); // Represents m1=g^1
+        Ciphertext ct2 = new Ciphertext(domainParams.getG().mod(domainParams.getP()), y.mod(domainParams.getP()));             // Represents m2=g^0=1
 
         EncryptedVote ev1 = new EncryptedVote(ct1, null);
         EncryptedVote ev2 = new EncryptedVote(ct2, null);
@@ -295,10 +296,10 @@ class VoteServiceImplTest {
 
         // Calculate expected product ciphertext: C_total = C_identity * C1 * C2
         Ciphertext identity = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
-        Ciphertext expectedProductCiphertext = identity.multiply(ct1, p).multiply(ct2, p);
+        Ciphertext expectedProductCiphertext = identity.multiply(ct1, domainParams.getP()).multiply(ct2, domainParams.getP());
 
         // Expected decrypted result: m1 * m2 = g^1 * g^0 = g^1 = g
-        BigInteger expectedDecryptedResult = g; // g^k where k = 1 + 0 = 1
+        BigInteger expectedDecryptedResult = domainParams.getG(); // g^k where k = 1 + 0 = 1
 
         // Mock the *final* decryption call
         when(elGamalCipher.decrypt(eq(samplePrivateKey), eq(expectedProductCiphertext)))
@@ -337,16 +338,16 @@ class VoteServiceImplTest {
        // Arrange
        // Use a real ciphertext for the valid vote
        // Arrange: One valid "Yes" vote (g^1) and one null entry
-       Ciphertext ctYes = new Ciphertext(g.modPow(BigInteger.TWO, p), g.multiply(samplePublicKey.getY().modPow(BigInteger.TWO, p)).mod(p)); // Enc(g^1)
+       Ciphertext ctYes = new Ciphertext(domainParams.getG().modPow(BigInteger.TWO, domainParams.getP()), domainParams.getG().multiply(samplePublicKey.getY().modPow(BigInteger.TWO, domainParams.getP())).mod(domainParams.getP())); // Enc(g^1)
        EncryptedVote evYes = new EncryptedVote(ctYes, null);
        List<EncryptedVote> encryptedVotes = Arrays.asList(evYes, null); // Add null entry
 
        // Calculate expected product ciphertext (identity * ctYes)
        Ciphertext identity = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
-       Ciphertext expectedProductCiphertext = identity.multiply(ctYes, p);
+       Ciphertext expectedProductCiphertext = identity.multiply(ctYes, domainParams.getP());
 
        // Expected decrypted result (g^k): g^1 = g
-       BigInteger expectedDecryptedGk = g;
+       BigInteger expectedDecryptedGk = domainParams.getG();
        // Expected final tally count (k): 1
        BigInteger expectedTallyCountK = BigInteger.ONE;
 
@@ -368,14 +369,14 @@ class VoteServiceImplTest {
        // Arrange
        // Use a real ciphertext for the valid vote
        // Arrange: One valid "No" vote (g^0) and one vote with null ciphertext
-       Ciphertext ctNo = new Ciphertext(g.modPow(BigInteger.valueOf(3), p), BigInteger.ONE.multiply(samplePublicKey.getY().modPow(BigInteger.valueOf(3), p)).mod(p)); // Enc(g^0)
+       Ciphertext ctNo = new Ciphertext(domainParams.getG().modPow(BigInteger.valueOf(3), domainParams.getP()), BigInteger.ONE.multiply(samplePublicKey.getY().modPow(BigInteger.valueOf(3), domainParams.getP())).mod(domainParams.getP())); // Enc(g^0)
        EncryptedVote evNo = new EncryptedVote(ctNo, null);
        EncryptedVote evWithNullCipher = new EncryptedVote(null, null); // Vote with null ciphertext
        List<EncryptedVote> encryptedVotes = Arrays.asList(evNo, evWithNullCipher);
 
        // Calculate expected product ciphertext (identity * ctNo)
        Ciphertext identity = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
-       Ciphertext expectedProductCiphertext = identity.multiply(ctNo, p);
+       Ciphertext expectedProductCiphertext = identity.multiply(ctNo, domainParams.getP());
 
        // Expected decrypted result (g^k): g^0 = 1
        BigInteger expectedDecryptedGk = BigInteger.ONE;
@@ -401,13 +402,13 @@ class VoteServiceImplTest {
        // Arrange
        // Use a real ciphertext
        // Arrange: One valid "Yes" vote
-       Ciphertext ctYes = new Ciphertext(g.modPow(BigInteger.TWO, p), g.multiply(samplePublicKey.getY().modPow(BigInteger.TWO, p)).mod(p)); // Enc(g^1)
+       Ciphertext ctYes = new Ciphertext(domainParams.getG().modPow(BigInteger.TWO, domainParams.getP()), domainParams.getG().multiply(samplePublicKey.getY().modPow(BigInteger.TWO, domainParams.getP())).mod(domainParams.getP())); // Enc(g^1)
        EncryptedVote evYes = new EncryptedVote(ctYes, null);
        List<EncryptedVote> encryptedVotes = List.of(evYes);
 
        // Calculate expected product ciphertext (identity * ct1)
        Ciphertext identity = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
-       Ciphertext expectedProductCiphertext = identity.multiply(ctYes, p);
+       Ciphertext expectedProductCiphertext = identity.multiply(ctYes, domainParams.getP());
 
        RuntimeException decryptionException = new RuntimeException("Final Decryption failed");
 
@@ -442,12 +443,12 @@ class VoteServiceImplTest {
     @Test
     void testTallyVotes_CannotDetermineTally() {
         // Arrange: One "Yes" vote
-        Ciphertext ctYes = new Ciphertext(g.modPow(BigInteger.TWO, p), g.multiply(samplePublicKey.getY().modPow(BigInteger.TWO, p)).mod(p)); // Enc(g^1)
+        Ciphertext ctYes = new Ciphertext(domainParams.getG().modPow(BigInteger.TWO, domainParams.getP()), domainParams.getG().multiply(samplePublicKey.getY().modPow(BigInteger.TWO, domainParams.getP())).mod(domainParams.getP())); // Enc(g^1)
         EncryptedVote evYes = new EncryptedVote(ctYes, null);
         List<EncryptedVote> encryptedVotes = List.of(evYes);
 
         Ciphertext identity = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
-        Ciphertext expectedProductCiphertext = identity.multiply(ctYes, p);
+        Ciphertext expectedProductCiphertext = identity.multiply(ctYes, domainParams.getP());
 
         // Mock decryption to return a value that is NOT g^0 or g^1 (assuming g != 10)
         BigInteger invalidDecryptedResult = BigInteger.TEN;

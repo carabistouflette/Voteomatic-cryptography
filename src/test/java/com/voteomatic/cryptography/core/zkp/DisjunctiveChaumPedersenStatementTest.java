@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.core.zkp;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import org.junit.jupiter.api.BeforeEach;
@@ -15,32 +16,36 @@ class DisjunctiveChaumPedersenStatementTest {
     private BigInteger m1;
     private DisjunctiveChaumPedersenStatement statement;
 
-    // Sample values (replace with realistic crypto parameters if needed for specific tests)
-    private final BigInteger p = BigInteger.valueOf(23);
-    private final BigInteger g = BigInteger.valueOf(5);
-    private final BigInteger h = BigInteger.valueOf(10); // y = g^x mod p
+    // Sample values
+    private final BigInteger p_val = BigInteger.valueOf(23);
+    private final BigInteger g_val = BigInteger.valueOf(5);
+    private final BigInteger q_val = p_val.subtract(BigInteger.ONE).divide(BigInteger.TWO); // q = 11
+    private final DomainParameters domainParams = new DomainParameters(p_val, g_val, q_val);
+    private final BigInteger h_val = BigInteger.valueOf(10); // y = g^x mod p (assuming some x)
     private final BigInteger c1 = BigInteger.valueOf(15); // g^r mod p
     private final BigInteger c2 = BigInteger.valueOf(20); // m*h^r mod p
 
     @BeforeEach
     void setUp() {
-        publicKey = new PublicKey(p, g, h);
+        publicKey = new PublicKey(domainParams, h_val);
         ciphertext = new Ciphertext(c1, c2);
         m0 = BigInteger.ONE; // Often g^0
-        m1 = g;             // Often g^1
+        m1 = domainParams.getG(); // Often g^1
         statement = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext, m0, m1);
     }
 
     @Test
     void constructor_validInputs_success() {
         assertNotNull(statement);
-        assertEquals(p, statement.getP());
-        assertEquals(g, statement.getG());
-        assertEquals(h, statement.getH());
+        assertEquals(domainParams.getP(), statement.getP());
+        assertEquals(domainParams.getG(), statement.getG());
+        assertEquals(domainParams.getQ(), statement.getQ()); // Check q as well
+        assertEquals(domainParams, statement.getParams()); // Check params object
+        assertEquals(h_val, statement.getH());
         assertEquals(c1, statement.getC1());
         assertEquals(c2, statement.getC2());
         assertEquals(m0, statement.getM0());
-        assertEquals(m1, statement.getM1());
+        assertEquals(m1, statement.getM1()); // m1 is g
     }
 
     @Test
@@ -80,11 +85,11 @@ class DisjunctiveChaumPedersenStatementTest {
     void constructor_publicKeyWithNullComponent_throwsNullPointerException() {
         // PublicKey constructor throws NPE if p is null
         NullPointerException exception = assertThrows(NullPointerException.class, () -> {
-             new PublicKey(null, g, h); // p is null
+             // PublicKey constructor now takes DomainParameters, so test null params
+             new PublicKey(null, h_val);
         });
-        // We don't even reach the Statement constructor in this case.
         // Verify the message comes from PublicKey's check.
-        assertTrue(exception.getMessage().contains("Prime modulus p cannot be null"));
+        assertTrue(exception.getMessage().contains("DomainParameters cannot be null"));
     }
 
      @Test
@@ -95,15 +100,17 @@ class DisjunctiveChaumPedersenStatementTest {
            new DisjunctiveChaumPedersenStatement(publicKey, badCipher, m0, m1);
         });
         // Verify the message comes from Statement's check
-        assertTrue(exception.getMessage().contains("Public key or ciphertext components cannot be null"));
+        assertTrue(exception.getMessage().contains("DomainParameters, public key value (h), or ciphertext components cannot be null"));
     }
 
 
     @Test
     void getters_returnCorrectValues() {
-        assertEquals(p, statement.getP());
-        assertEquals(g, statement.getG());
-        assertEquals(h, statement.getH());
+        assertEquals(domainParams.getP(), statement.getP());
+        assertEquals(domainParams.getG(), statement.getG());
+        assertEquals(domainParams.getQ(), statement.getQ());
+        assertEquals(domainParams, statement.getParams());
+        assertEquals(h_val, statement.getH());
         assertEquals(c1, statement.getC1());
         assertEquals(c2, statement.getC2());
         assertEquals(m0, statement.getM0());
@@ -129,31 +136,33 @@ class DisjunctiveChaumPedersenStatementTest {
     void equals_equalObjects_returnsTrue() {
         DisjunctiveChaumPedersenStatement statement1 = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext, m0, m1);
         DisjunctiveChaumPedersenStatement statement2 = new DisjunctiveChaumPedersenStatement(
-            new PublicKey(p, g, h),
+            new PublicKey(domainParams, h_val), // Use same params and h
             new Ciphertext(c1, c2),
             m0,
-            m1
+            m1 // m1 is g from domainParams
         );
         assertTrue(statement1.equals(statement2));
     }
 
     @Test
     void equals_differentP_returnsFalse() {
-        PublicKey diffKey = new PublicKey(p.add(BigInteger.ONE), g, h);
+        DomainParameters diffParams = new DomainParameters(p_val.add(BigInteger.ONE), g_val, q_val); // Modify p
+        PublicKey diffKey = new PublicKey(diffParams, h_val);
         DisjunctiveChaumPedersenStatement other = new DisjunctiveChaumPedersenStatement(diffKey, ciphertext, m0, m1);
         assertFalse(statement.equals(other));
     }
 
      @Test
     void equals_differentG_returnsFalse() {
-        PublicKey diffKey = new PublicKey(p, g.add(BigInteger.ONE), h);
+        DomainParameters diffParams = new DomainParameters(p_val, g_val.add(BigInteger.ONE), q_val); // Modify g
+        PublicKey diffKey = new PublicKey(diffParams, h_val);
         DisjunctiveChaumPedersenStatement other = new DisjunctiveChaumPedersenStatement(diffKey, ciphertext, m0, m1);
         assertFalse(statement.equals(other));
     }
 
      @Test
     void equals_differentH_returnsFalse() {
-        PublicKey diffKey = new PublicKey(p, g, h.add(BigInteger.ONE));
+        PublicKey diffKey = new PublicKey(domainParams, h_val.add(BigInteger.ONE)); // Modify h (y)
         DisjunctiveChaumPedersenStatement other = new DisjunctiveChaumPedersenStatement(diffKey, ciphertext, m0, m1);
         assertFalse(statement.equals(other));
     }
@@ -189,10 +198,10 @@ class DisjunctiveChaumPedersenStatementTest {
     void hashCode_equalObjects_haveSameHashCode() {
          DisjunctiveChaumPedersenStatement statement1 = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext, m0, m1);
          DisjunctiveChaumPedersenStatement statement2 = new DisjunctiveChaumPedersenStatement(
-            new PublicKey(p, g, h),
+            new PublicKey(domainParams, h_val),
             new Ciphertext(c1, c2),
             m0,
-            m1
+            m1 // m1 is g from domainParams
         );
         assertEquals(statement1.hashCode(), statement2.hashCode());
     }
@@ -208,12 +217,12 @@ class DisjunctiveChaumPedersenStatementTest {
     void toString_containsClassNameAndFieldValues() {
         String statementString = statement.toString();
         assertTrue(statementString.contains("DisjunctiveChaumPedersenStatement"));
-        assertTrue(statementString.contains("p=" + p));
-        assertTrue(statementString.contains("g=" + g));
-        assertTrue(statementString.contains("h=" + h));
+        // Check that the params object's toString is included
+        assertTrue(statementString.contains("params=" + domainParams.toString()));
+        assertTrue(statementString.contains("h=" + h_val));
         assertTrue(statementString.contains("c1=" + c1));
         assertTrue(statementString.contains("c2=" + c2));
         assertTrue(statementString.contains("m0=" + m0));
-        assertTrue(statementString.contains("m1=" + m1));
+        assertTrue(statementString.contains("m1=" + m1)); // m1 is g
     }
 }

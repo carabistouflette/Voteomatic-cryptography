@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.core.elgamal;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 // Project classes
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl;
@@ -24,9 +25,8 @@ public class ElGamalCipherImplTest {
     private ElGamalCipher elGamalCipher;
     private PublicKey publicKey;
     private PrivateKey privateKey;
-    private BigInteger p; // Prime modulus
-    private BigInteger g; // Generator
-
+    // p and g are now part of domainParams
+    private DomainParameters domainParams;
     @BeforeEach
     void setUp() {
         // Use a deterministic seed for reproducibility in tests if needed,
@@ -37,18 +37,20 @@ public class ElGamalCipherImplTest {
         // Simple, small ElGamal parameters for faster testing (p=23, g=5)
         // p must be prime, g must be a generator modulo p.
         // 5 is a generator mod 23 because its powers generate all numbers from 1 to 22.
-        p = new BigInteger("23");
-        g = new BigInteger("5");
+        BigInteger p = new BigInteger("23");
+        BigInteger g = new BigInteger("5");
+        BigInteger q = p.subtract(BigInteger.ONE).divide(BigInteger.TWO); // q = (23-1)/2 = 11
+        domainParams = new DomainParameters(p, g, q);
 
         // Manually generate a KeyPair for testing consistency.
         // Choose a private key x such that 1 < x < p-1.
         BigInteger x = new BigInteger("6"); // Example private key
 
         // Calculate the corresponding public key y = g^x mod p.
-        BigInteger y = g.modPow(x, p); // 5^6 mod 23 = 8
-
-        publicKey = new PublicKey(p, g, y);
-        privateKey = new PrivateKey(p, g, x);
+        BigInteger y = domainParams.getG().modPow(x, domainParams.getP()); // 5^6 mod 23 = 8
+    
+        publicKey = new PublicKey(domainParams, y);
+        privateKey = new PrivateKey(domainParams, x);
     }
 
     /**
@@ -58,7 +60,7 @@ public class ElGamalCipherImplTest {
     void testEncryptDecrypt_Success() {
         // Choose a message m such that 1 <= m < p.
         BigInteger message = new BigInteger("13");
-        Assertions.assertTrue(message.compareTo(BigInteger.ONE) >= 0 && message.compareTo(p) < 0,
+        Assertions.assertTrue(message.compareTo(BigInteger.ONE) >= 0 && message.compareTo(domainParams.getP()) < 0,
                 "Test message must be within the valid range [1, p-1]");
 
         // Encrypt the message using the public key
@@ -84,7 +86,7 @@ public class ElGamalCipherImplTest {
     @Test
     void testEncryptDecrypt_MessageOne() {
         BigInteger message = BigInteger.ONE;
-        assertTrue(message.compareTo(BigInteger.ONE) >= 0 && message.compareTo(p) < 0,
+        assertTrue(message.compareTo(BigInteger.ONE) >= 0 && message.compareTo(domainParams.getP()) < 0,
                 "Test message must be within the valid range [1, p-1]");
 
         EncryptionResult encryptionResult = elGamalCipher.encrypt(publicKey, message);
@@ -134,12 +136,12 @@ public class ElGamalCipherImplTest {
      */
     @Test
     void testEncrypt_MessageOutOfRange_AbovePMinusOne() {
-        BigInteger message = p; // Message equal to p
+        BigInteger message = domainParams.getP(); // Message equal to p
          assertThrows(IllegalArgumentException.class, () -> {
             elGamalCipher.encrypt(publicKey, message);
         }, "Encrypting a message >= p should throw IllegalArgumentException");
 
-        BigInteger message2 = p.add(BigInteger.ONE); // Message greater than p
+        BigInteger message2 = domainParams.getP().add(BigInteger.ONE); // Message greater than p
          assertThrows(IllegalArgumentException.class, () -> {
             elGamalCipher.encrypt(publicKey, message2);
         }, "Encrypting a message >= p should throw IllegalArgumentException");
@@ -211,7 +213,7 @@ public class ElGamalCipherImplTest {
 
         // Create a different private key (x=7 instead of 6)
         BigInteger wrongX = new BigInteger("7");
-        PrivateKey wrongPrivateKey = new PrivateKey(p, g, wrongX);
+        PrivateKey wrongPrivateKey = new PrivateKey(domainParams, wrongX);
 
         BigInteger decryptedMessage = elGamalCipher.decrypt(wrongPrivateKey, ciphertext);
 

@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.core.zkp;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
@@ -30,11 +31,12 @@ class DisjunctiveChaumPedersenProverTest {
     private DisjunctiveChaumPedersenProver prover;
 
     // Sample crypto parameters (use small values for easier testing)
-    private final BigInteger p = BigInteger.valueOf(23);
-    private final BigInteger g = BigInteger.valueOf(5);
-    private final BigInteger x = BigInteger.valueOf(6); // Secret key
-    private final BigInteger h = BigInteger.valueOf(8); // Public key y = g^x mod p = 5^6 mod 23 = 8
-    private final BigInteger q = p.subtract(BigInteger.ONE); // Order = 22
+    private final BigInteger p_val = BigInteger.valueOf(23);
+    private final BigInteger g_val = BigInteger.valueOf(5);
+    private final BigInteger q_val = p_val.subtract(BigInteger.ONE).divide(BigInteger.TWO); // Prime subgroup order q = (23-1)/2 = 11
+    private final DomainParameters domainParams = new DomainParameters(p_val, g_val, q_val);
+    // private final BigInteger x = BigInteger.valueOf(6); // Secret key - not directly used here, but h depends on it
+    private final BigInteger h_val = g_val.modPow(BigInteger.valueOf(6), p_val); // Public key y = g^x mod p = 5^6 mod 23 = 8
 
     private PublicKey publicKey;
     private BigInteger m0; // Represents vote 0 (e.g., g^0 = 1)
@@ -59,21 +61,21 @@ class DisjunctiveChaumPedersenProverTest {
 
     @BeforeEach
     void setUp() throws SecurityUtilException {
-        publicKey = new PublicKey(p, g, h);
-        m0 = BigInteger.ONE;
-        m1 = g; // 5
+        publicKey = new PublicKey(domainParams, h_val);
+        m0 = BigInteger.ONE; // Represents g^0
+        m1 = domainParams.getG(); // Represents g^1 = 5
         r = BigInteger.valueOf(7); // ElGamal randomness
 
         // Ciphertext for m0 (c1=g^r, c2=m0*h^r)
-        BigInteger c1_0 = g.modPow(r, p); // 5^7 mod 23 = 17
-        BigInteger c2_0 = m0.multiply(h.modPow(r, p)).mod(p); // 1 * 8^7 mod 23 = 1 * 12 mod 23 = 12
+        BigInteger c1_0 = domainParams.getG().modPow(r, domainParams.getP()); // 5^7 mod 23 = 17
+        BigInteger c2_0 = m0.multiply(h_val.modPow(r, domainParams.getP())).mod(domainParams.getP()); // 1 * 8^7 mod 23 = 1 * 12 mod 23 = 12
         ciphertext0 = new Ciphertext(c1_0, c2_0); // (17, 12)
         statement0 = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext0, m0, m1);
         witness0 = new DisjunctiveChaumPedersenWitness(r, 0); // Witness for encrypting m0
 
         // Ciphertext for m1 (c1=g^r, c2=m1*h^r)
-        BigInteger c1_1 = g.modPow(r, p); // 5^7 mod 23 = 17 (same c1)
-        BigInteger c2_1 = m1.multiply(h.modPow(r, p)).mod(p); // 5 * 8^7 mod 23 = 5 * 12 mod 23 = 60 mod 23 = 14
+        BigInteger c1_1 = domainParams.getG().modPow(r, domainParams.getP()); // 5^7 mod 23 = 17 (same c1)
+        BigInteger c2_1 = m1.multiply(h_val.modPow(r, domainParams.getP())).mod(domainParams.getP()); // 5 * 8^7 mod 23 = 5 * 12 mod 23 = 60 mod 23 = 14
         ciphertext1 = new Ciphertext(c1_1, c2_1); // (17, 14)
         statement1 = new DisjunctiveChaumPedersenStatement(publicKey, ciphertext1, m0, m1);
         witness1 = new DisjunctiveChaumPedersenWitness(r, 1); // Witness for encrypting m1
@@ -108,35 +110,35 @@ class DisjunctiveChaumPedersenProverTest {
         // Mock hash calculation result for this specific test
         when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
 
-        // Mock random numbers needed for v=0 case
-        when(randomGenerator.generateBigInteger(q))
+        // Mock random numbers needed for v=0 case (use q_val for subgroup order)
+        when(randomGenerator.generateBigInteger(domainParams.getQ()))
             .thenReturn(mockSimulatedC1) // c1' (simulated challenge)
             .thenReturn(mockSimulatedR1) // r1' (simulated response)
             .thenReturn(mockW0);         // w0 (real commitment random)
 
         // Expected calculations
         // Simulate v=1
-        BigInteger expected_g_pow_r1 = g.modPow(mockSimulatedR1, p); // 5^14 mod 23 = 6
-        BigInteger expected_c1_pow_neg_c1 = ciphertext0.getC1().modPow(mockSimulatedC1.negate(), p); // 17^(-12) mod 23 = 17^10 mod 23 = 9
-        BigInteger expected_a1 = expected_g_pow_r1.multiply(expected_c1_pow_neg_c1).mod(p); // 6 * 9 mod 23 = 54 mod 23 = 8
+        BigInteger expected_g_pow_r1 = domainParams.getG().modPow(mockSimulatedR1, domainParams.getP()); // 5^14 mod 23 = 6
+        BigInteger expected_c1_pow_neg_c1 = ciphertext0.getC1().modPow(mockSimulatedC1.negate(), domainParams.getP()); // 17^(-12) mod 23 = 17^10 mod 23 = 9
+        BigInteger expected_a1 = expected_g_pow_r1.multiply(expected_c1_pow_neg_c1).mod(domainParams.getP()); // 6 * 9 mod 23 = 54 mod 23 = 8
 
-        BigInteger expected_h_pow_r1 = h.modPow(mockSimulatedR1, p); // 10^14 mod 23 = 3
-        BigInteger c2_div_m1 = ciphertext0.getC2().multiply(m1.modInverse(p)).mod(p); // 16 * 5^-1 mod 23 = 16 * 14 mod 23 = 224 mod 23 = 17
-        BigInteger c2_div_m1_pow_neg_c1 = c2_div_m1.modPow(mockSimulatedC1.negate(), p); // 17^(-12) mod 23 = 17^10 mod 23 = 9
-        BigInteger expected_b1 = expected_h_pow_r1.multiply(c2_div_m1_pow_neg_c1).mod(p); // 6 * 9 mod 23 = 54 mod 23 = 8
+        BigInteger expected_h_pow_r1 = h_val.modPow(mockSimulatedR1, domainParams.getP()); // 8^14 mod 23 = 6
+        BigInteger c2_div_m1 = ciphertext0.getC2().multiply(m1.modInverse(domainParams.getP())).mod(domainParams.getP()); // 12 * 5^-1 mod 23 = 12 * 14 mod 23 = 168 mod 23 = 7
+        BigInteger c2_div_m1_pow_neg_c1 = c2_div_m1.modPow(mockSimulatedC1.negate(), domainParams.getP()); // 7^(-12) mod 23 = 7^10 mod 23 = 9
+        BigInteger expected_b1 = expected_h_pow_r1.multiply(c2_div_m1_pow_neg_c1).mod(domainParams.getP()); // 6 * 9 mod 23 = 54 mod 23 = 8
 
         // Real proof v=0
-        BigInteger expected_a0 = g.modPow(mockW0, p); // 5^3 mod 23 = 125 mod 23 = 10
-        BigInteger expected_b0 = h.modPow(mockW0, p); // 8^3 mod 23 = 512 mod 23 = 6
+        BigInteger expected_a0 = domainParams.getG().modPow(mockW0, domainParams.getP()); // 5^3 mod 23 = 125 mod 23 = 10
+        BigInteger expected_b0 = h_val.modPow(mockW0, domainParams.getP()); // 8^3 mod 23 = 512 mod 23 = 6
 
-        // Challenge c = H(...) mod q
-        BigInteger expected_c = mockChallengeHash.mod(q); // 15 mod 22 = 15
+        // Challenge c = H(...) mod q (use subgroup order q_val)
+        BigInteger expected_c = mockChallengeHash.mod(domainParams.getQ()); // 15 mod 11 = 4
 
         // Real challenge c0 = c - c1' mod q
-        BigInteger expected_c0 = expected_c.subtract(mockSimulatedC1).mod(q); // (15 - 12) mod 22 = 3
+        BigInteger expected_c0 = expected_c.subtract(mockSimulatedC1).mod(domainParams.getQ()); // (4 - 12) mod 11 = -8 mod 11 = 3
 
         // Real response r0 = w0 + c0 * r mod q
-        BigInteger expected_r0 = mockW0.add(expected_c0.multiply(r)).mod(q); // 3 + (3 * 7) mod 22 = 3 + 21 mod 22 = 24 mod 22 = 2
+        BigInteger expected_r0 = mockW0.add(expected_c0.multiply(r)).mod(domainParams.getQ()); // 3 + (3 * 7) mod 11 = 3 + 21 mod 11 = 3 + 10 mod 11 = 13 mod 11 = 2
 
         // Execute
         Proof proof = prover.generateProof(statement0, witness0);
@@ -157,7 +159,7 @@ class DisjunctiveChaumPedersenProverTest {
         // Verify hash was called once with the correct structure (byte array)
         verify(hashAlgorithm, times(1)).hash(any(byte[].class));
         // Verify random generator calls
-        verify(randomGenerator, times(3)).generateBigInteger(q);
+        verify(randomGenerator, times(3)).generateBigInteger(domainParams.getQ());
     }
 
      @Test
@@ -165,35 +167,35 @@ class DisjunctiveChaumPedersenProverTest {
         // Mock hash calculation result for this specific test
         when(hashAlgorithm.hash(any(byte[].class))).thenReturn(mockChallengeHash.toByteArray());
 
-        // Mock random numbers needed for v=1 case
-        when(randomGenerator.generateBigInteger(q))
+        // Mock random numbers needed for v=1 case (use q_val for subgroup order)
+        when(randomGenerator.generateBigInteger(domainParams.getQ()))
             .thenReturn(mockSimulatedC0) // c0' (simulated challenge)
             .thenReturn(mockSimulatedR0) // r0' (simulated response)
             .thenReturn(mockW1);         // w1 (real commitment random)
 
         // Expected calculations
         // Simulate v=0
-        BigInteger expected_g_pow_r0 = g.modPow(mockSimulatedR0, p); // 5^13 mod 23 = 10
-        BigInteger expected_c1_pow_neg_c0 = ciphertext1.getC1().modPow(mockSimulatedC0.negate(), p); // 17^(-11) mod 23 = 17^11 mod 23 = 3
-        BigInteger expected_a0 = expected_g_pow_r0.multiply(expected_c1_pow_neg_c0).mod(p); // 10 * 3 mod 23 = 30 mod 23 = 7
+        BigInteger expected_g_pow_r0 = domainParams.getG().modPow(mockSimulatedR0, domainParams.getP()); // 5^13 mod 23 = 10
+        BigInteger expected_c1_pow_neg_c0 = ciphertext1.getC1().modPow(mockSimulatedC0.negate(), domainParams.getP()); // 17^(-11) mod 23 = 17^11 mod 23 = 3
+        BigInteger expected_a0 = expected_g_pow_r0.multiply(expected_c1_pow_neg_c0).mod(domainParams.getP()); // 10 * 3 mod 23 = 30 mod 23 = 7
 
-        BigInteger expected_h_pow_r0 = h.modPow(mockSimulatedR0, p); // 10^13 mod 23 = 9
-        BigInteger c2_div_m0 = ciphertext1.getC2().multiply(m0.modInverse(p)).mod(p); // 11 * 1^-1 mod 23 = 11
-        BigInteger c2_div_m0_pow_neg_c0 = c2_div_m0.modPow(mockSimulatedC0.negate(), p); // 11^(-11) mod 23 = 11^11 mod 23 = 9
-        BigInteger expected_b0 = expected_h_pow_r0.multiply(c2_div_m0_pow_neg_c0).mod(p); // 18 * 14 mod 23 = 252 mod 23 = 22
+        BigInteger expected_h_pow_r0 = h_val.modPow(mockSimulatedR0, domainParams.getP()); // 8^13 mod 23 = 18
+        BigInteger c2_div_m0 = ciphertext1.getC2().multiply(m0.modInverse(domainParams.getP())).mod(domainParams.getP()); // 14 * 1^-1 mod 23 = 14
+        BigInteger c2_div_m0_pow_neg_c0 = c2_div_m0.modPow(mockSimulatedC0.negate(), domainParams.getP()); // 14^(-11) mod 23 = 14^11 mod 23 = 14
+        BigInteger expected_b0 = expected_h_pow_r0.multiply(c2_div_m0_pow_neg_c0).mod(domainParams.getP()); // 18 * 14 mod 23 = 252 mod 23 = 22
 
         // Real proof v=1
-        BigInteger expected_a1 = g.modPow(mockW1, p); // 5^4 mod 23 = 625 mod 23 = 4
-        BigInteger expected_b1 = h.modPow(mockW1, p); // 8^4 mod 23 = 4096 mod 23 = 2
+        BigInteger expected_a1 = domainParams.getG().modPow(mockW1, domainParams.getP()); // 5^4 mod 23 = 625 mod 23 = 4
+        BigInteger expected_b1 = h_val.modPow(mockW1, domainParams.getP()); // 8^4 mod 23 = 4096 mod 23 = 2
 
-        // Challenge c = H(...) mod q
-        BigInteger expected_c = mockChallengeHash.mod(q); // 15 mod 22 = 15
+        // Challenge c = H(...) mod q (use subgroup order q_val)
+        BigInteger expected_c = mockChallengeHash.mod(domainParams.getQ()); // 15 mod 11 = 4
 
         // Real challenge c1 = c - c0' mod q
-        BigInteger expected_c1 = expected_c.subtract(mockSimulatedC0).mod(q); // (15 - 11) mod 22 = 4
+        BigInteger expected_c1 = expected_c.subtract(mockSimulatedC0).mod(domainParams.getQ()); // (4 - 11) mod 11 = -7 mod 11 = 4
 
         // Real response r1 = w1 + c1 * r mod q
-        BigInteger expected_r1 = mockW1.add(expected_c1.multiply(r)).mod(q); // 4 + (4 * 7) mod 22 = 4 + 28 mod 22 = 32 mod 22 = 10
+        BigInteger expected_r1 = mockW1.add(expected_c1.multiply(r)).mod(domainParams.getQ()); // 4 + (4 * 7) mod 11 = 4 + 28 mod 11 = 4 + 6 mod 11 = 10
 
         // Execute
         Proof proof = prover.generateProof(statement1, witness1);
@@ -214,13 +216,13 @@ class DisjunctiveChaumPedersenProverTest {
         // Verify hash was called once
         verify(hashAlgorithm, times(1)).hash(any(byte[].class));
          // Verify random generator calls
-        verify(randomGenerator, times(3)).generateBigInteger(q);
+        verify(randomGenerator, times(3)).generateBigInteger(domainParams.getQ());
     }
 
     @Test
     void generateProof_randomGeneratorThrowsException_throwsZkpException() throws SecurityUtilException {
         SecurityUtilException secEx = new SecurityUtilException("Random fail");
-        when(randomGenerator.generateBigInteger(q)).thenThrow(secEx);
+        when(randomGenerator.generateBigInteger(domainParams.getQ())).thenThrow(secEx);
 
         ZkpException exception = assertThrows(ZkpException.class, () -> prover.generateProof(statement0, witness0));
         assertTrue(exception.getMessage().contains("Failed to generate Disjunctive Chaum-Pedersen proof"));
@@ -230,7 +232,7 @@ class DisjunctiveChaumPedersenProverTest {
      @Test
     void generateProof_hashAlgorithmThrowsException_throwsZkpException() throws SecurityUtilException {
         // Mock random numbers needed to reach hash calculation
-        when(randomGenerator.generateBigInteger(q))
+        when(randomGenerator.generateBigInteger(domainParams.getQ()))
             .thenReturn(mockSimulatedC1)
             .thenReturn(mockSimulatedR1)
             .thenReturn(mockW0);
@@ -247,12 +249,12 @@ class DisjunctiveChaumPedersenProverTest {
     void generateProof_modInverseThrowsArithmeticException_throwsZkpException() throws SecurityUtilException {
          // Create a scenario where modInverse fails (e.g., m1 is 0 or not coprime to p)
          // This is unlikely with typical crypto params but good to test boundary
-         BigInteger bad_m1 = p; // Not invertible mod p
+         BigInteger bad_m1 = domainParams.getP(); // Not invertible mod p
          Ciphertext bad_ciphertext = new Ciphertext(ciphertext0.getC1(), ciphertext0.getC2()); // Use ciphertext0 for simplicity
          DisjunctiveChaumPedersenStatement bad_statement = new DisjunctiveChaumPedersenStatement(publicKey, bad_ciphertext, m0, bad_m1);
          DisjunctiveChaumPedersenWitness bad_witness = new DisjunctiveChaumPedersenWitness(r, 0); // v=0, so simulation for v=1 will fail
 
-         when(randomGenerator.generateBigInteger(q))
+         when(randomGenerator.generateBigInteger(domainParams.getQ()))
             .thenReturn(mockSimulatedC1)
             .thenReturn(mockSimulatedR1); // Only need these for the failing simulation path
 

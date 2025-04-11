@@ -1,124 +1,129 @@
 package com.voteomatic.cryptography.core.elgamal;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import org.junit.jupiter.api.Test;
 import java.math.BigInteger;
 import static org.junit.jupiter.api.Assertions.*;
 
 class PrivateKeyTest {
 
-    private final BigInteger p = new BigInteger("23"); // Example prime
-    private final BigInteger g = new BigInteger("5");  // Example generator
-    private final BigInteger x = new BigInteger("6");  // Example private key
+    private final BigInteger p_val = new BigInteger("23"); // Example prime value
+    private final BigInteger g_val = new BigInteger("5");  // Example generator value
+    private final BigInteger q_val = p_val.subtract(BigInteger.ONE).divide(BigInteger.TWO); // q = 11
+    private final DomainParameters params = new DomainParameters(p_val, g_val, q_val);
+    private final BigInteger x_val = new BigInteger("6");  // Example private key value
 
     @Test
     void constructorAndGetters_ValidInput_ShouldSucceed() {
-        PrivateKey privateKey = new PrivateKey(p, g, x);
+        PrivateKey privateKey = new PrivateKey(params, x_val);
 
-        assertEquals(p, privateKey.getP(), "getP should return the prime modulus p.");
-        assertEquals(g, privateKey.getG(), "getG should return the generator g.");
-        assertEquals(x, privateKey.getX(), "getX should return the private exponent x.");
+        assertEquals(params, privateKey.getParams(), "getParams should return the DomainParameters object.");
+        assertEquals(p_val, privateKey.getP(), "getP should return the prime modulus p from params.");
+        assertEquals(g_val, privateKey.getG(), "getG should return the generator g from params.");
+        assertEquals(q_val, privateKey.getQ(), "getQ should return the subgroup order q from params.");
+        assertEquals(x_val, privateKey.getX(), "getX should return the private exponent x.");
     }
 
     @Test
-    void constructor_NullP_ShouldThrowNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new PrivateKey(null, g, x),
-                     "Constructor should throw NullPointerException if p is null.");
+    void constructor_NullParams_ShouldThrowNullPointerException() {
+        assertThrows(NullPointerException.class, () -> new PrivateKey(null, x_val),
+                     "Constructor should throw NullPointerException if params is null.");
     }
 
-    @Test
-    void constructor_NullG_ShouldThrowNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new PrivateKey(p, null, x),
-                     "Constructor should throw NullPointerException if g is null.");
-    }
+    // Tests for null G is implicitly covered by null Params test now.
 
     @Test
     void constructor_NullX_ShouldThrowNullPointerException() {
-        assertThrows(NullPointerException.class, () -> new PrivateKey(p, g, null),
+        assertThrows(NullPointerException.class, () -> new PrivateKey(params, null),
                      "Constructor should throw NullPointerException if x is null.");
     }
 
     @Test
     void equals_SameObject_ShouldReturnTrue() {
-        PrivateKey key1 = new PrivateKey(p, g, x);
+        PrivateKey key1 = new PrivateKey(params, x_val);
         assertTrue(key1.equals(key1), "An object should be equal to itself.");
     }
 
     @Test
     void equals_EqualObjects_ShouldReturnTrue() {
-        PrivateKey key1 = new PrivateKey(p, g, x);
-        PrivateKey key2 = new PrivateKey(p, g, x); // Same values
+        PrivateKey key1 = new PrivateKey(params, x_val);
+        PrivateKey key2 = new PrivateKey(params, x_val); // Same values
         assertTrue(key1.equals(key2), "Objects with the same p, g, and x should be equal.");
     }
 
     @Test
-    void equals_DifferentP_ShouldReturnFalse() {
-        BigInteger p2 = new BigInteger("29"); // Different prime
-        PrivateKey key1 = new PrivateKey(p, g, x);
-        PrivateKey key2 = new PrivateKey(p2, g, x);
-        assertFalse(key1.equals(key2), "Objects with different p should not be equal.");
+    void equals_DifferentParamsP_ShouldReturnFalse() {
+        BigInteger p2_val = new BigInteger("29"); // Different prime value
+        DomainParameters params2 = new DomainParameters(p2_val, g_val, p2_val.subtract(BigInteger.ONE).divide(BigInteger.TWO)); // Different params
+        PrivateKey key1 = new PrivateKey(params, x_val);
+        PrivateKey key2 = new PrivateKey(params2, x_val);
+        assertFalse(key1.equals(key2), "Objects with different params (different p) should not be equal.");
     }
 
     @Test
-    void equals_DifferentG_ShouldReturnFalse() {
-        BigInteger g2 = new BigInteger("7"); // Different generator
-        PrivateKey key1 = new PrivateKey(p, g, x);
-        PrivateKey key2 = new PrivateKey(p, g2, x);
-        assertFalse(key1.equals(key2), "Objects with different g should not be equal.");
+    void equals_DifferentParamsG_ShouldReturnFalse() {
+        BigInteger g2_val = new BigInteger("7"); // Different generator value
+        DomainParameters params2 = new DomainParameters(p_val, g2_val, q_val); // Different params
+        PrivateKey key1 = new PrivateKey(params, x_val);
+        PrivateKey key2 = new PrivateKey(params2, x_val);
+        assertFalse(key1.equals(key2), "Objects with different params (different g) should not be equal.");
     }
 
     @Test
     void equals_DifferentX_ShouldReturnFalse() {
-        BigInteger x2 = new BigInteger("7"); // Different private key
-        PrivateKey key1 = new PrivateKey(p, g, x);
-        PrivateKey key2 = new PrivateKey(p, g, x2);
+        BigInteger x2_val = new BigInteger("7"); // Different private key value
+        PrivateKey key1 = new PrivateKey(params, x_val);
+        PrivateKey key2 = new PrivateKey(params, x2_val); // Same params, different x
         assertFalse(key1.equals(key2), "Objects with different x should not be equal.");
     }
 
     @Test
     void equals_NullObject_ShouldReturnFalse() {
-        PrivateKey key1 = new PrivateKey(p, g, x);
+        PrivateKey key1 = new PrivateKey(params, x_val);
         assertFalse(key1.equals(null), "An object should not be equal to null.");
     }
 
     @Test
     void equals_DifferentType_ShouldReturnFalse() {
-        PrivateKey key1 = new PrivateKey(p, g, x);
+        PrivateKey key1 = new PrivateKey(params, x_val);
         Object other = new Object();
         assertFalse(key1.equals(other), "An object should not be equal to an object of a different type.");
     }
 
     @Test
     void hashCode_EqualObjects_ShouldHaveEqualHashCodes() {
-        PrivateKey key1 = new PrivateKey(p, g, x);
-        PrivateKey key2 = new PrivateKey(p, g, x); // Same values
+        PrivateKey key1 = new PrivateKey(params, x_val);
+        PrivateKey key2 = new PrivateKey(params, x_val); // Same values
         assertEquals(key1.hashCode(), key2.hashCode(), "Equal objects should have equal hash codes.");
     }
 
     @Test
     void hashCode_DifferentObjects_HashCodesMayDiffer() {
-        BigInteger p2 = new BigInteger("29");
-        BigInteger g2 = new BigInteger("7");
-        BigInteger x2 = new BigInteger("7");
+        BigInteger p2_val = new BigInteger("29");
+        BigInteger g2_val = new BigInteger("7");
+        BigInteger x2_val = new BigInteger("7");
+        DomainParameters params2_p = new DomainParameters(p2_val, g_val, p2_val.subtract(BigInteger.ONE).divide(BigInteger.TWO));
+        DomainParameters params2_g = new DomainParameters(p_val, g2_val, q_val);
 
-        PrivateKey key1 = new PrivateKey(p, g, x);
-        PrivateKey key2 = new PrivateKey(p2, g, x); // Different p
-        PrivateKey key3 = new PrivateKey(p, g2, x); // Different g
-        PrivateKey key4 = new PrivateKey(p, g, x2); // Different x
+        PrivateKey key1 = new PrivateKey(params, x_val);
+        PrivateKey key2 = new PrivateKey(params2_p, x_val); // Different params (p)
+        PrivateKey key3 = new PrivateKey(params2_g, x_val); // Different params (g)
+        PrivateKey key4 = new PrivateKey(params, x2_val); // Different x
 
-        assertNotEquals(key1.hashCode(), key2.hashCode(), "Hash code should likely differ if p differs.");
-        assertNotEquals(key1.hashCode(), key3.hashCode(), "Hash code should likely differ if g differs.");
+        assertNotEquals(key1.hashCode(), key2.hashCode(), "Hash code should likely differ if params differ (p).");
+        assertNotEquals(key1.hashCode(), key3.hashCode(), "Hash code should likely differ if params differ (g).");
         assertNotEquals(key1.hashCode(), key4.hashCode(), "Hash code should likely differ if x differs.");
     }
 
     @Test
     void toString_ContainsFieldValuesAndRedactsX() {
-        PrivateKey privateKey = new PrivateKey(p, g, x);
+        PrivateKey privateKey = new PrivateKey(params, x_val);
         String str = privateKey.toString();
 
-        assertTrue(str.contains("p=" + p), "toString should contain the value of p.");
-        assertTrue(str.contains("g=" + g), "toString should contain the value of g.");
+        // Check if the params object's toString is included, and x is redacted
+        assertTrue(str.contains("params=" + params.toString()), "toString should contain the DomainParameters object string representation.");
         assertTrue(str.contains("x=[REDACTED]"), "toString should contain 'x=[REDACTED]'.");
-        assertFalse(str.contains("x=" + x), "toString should NOT contain the actual value of x.");
+        assertFalse(str.contains("x=" + x_val), "toString should NOT contain the actual value of x.");
         assertTrue(str.startsWith("PrivateKey{"), "toString should start with the class name.");
         assertTrue(str.endsWith("}"), "toString should end with '}'.");
     }

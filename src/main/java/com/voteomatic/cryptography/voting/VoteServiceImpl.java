@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.voting;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import com.voteomatic.cryptography.core.elgamal.*; // Import EncryptionResult
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
@@ -122,7 +123,9 @@ public class VoteServiceImpl implements VoteService {
             return BigInteger.ZERO;
         }
 
-        BigInteger p = electionPrivateKey.getP(); // Get modulus from private key
+        DomainParameters params = electionPrivateKey.getParams();
+        Objects.requireNonNull(params, "DomainParameters cannot be null in PrivateKey");
+        BigInteger p = params.getP(); // Get modulus from private key's DomainParameters
 
         // Initialize accumulated ciphertext with the identity element (1, 1)
         Ciphertext accumulatedCiphertext = new Ciphertext(BigInteger.ONE, BigInteger.ONE);
@@ -155,7 +158,7 @@ public class VoteServiceImpl implements VoteService {
             // Find k by solving the discrete logarithm g^k = decryptedResultGk (mod p)
             // Since k represents the count of "Yes" votes (encoded as g^1),
             // we can find it by trial exponentiation for small k.
-            BigInteger g = electionPrivateKey.getG();
+            BigInteger g = params.getG(); // Get generator from private key's DomainParameters
             BigInteger currentGPower = BigInteger.ONE; // Start with g^0
             BigInteger k = BigInteger.ZERO;
 

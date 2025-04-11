@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.core.zkp;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 
@@ -16,8 +17,7 @@ import java.util.Objects;
  */
 public class DisjunctiveChaumPedersenStatement implements Statement {
 
-    private final BigInteger p; // Group modulus
-    private final BigInteger g; // Group generator
+    private final DomainParameters params; // Group parameters (p, g, q)
     private final BigInteger h; // Public key value (y in ElGamal)
     private final BigInteger c1; // Ciphertext component 1 (g^r)
     private final BigInteger c2; // Ciphertext component 2 (m * h^r)
@@ -30,8 +30,7 @@ public class DisjunctiveChaumPedersenStatement implements Statement {
         Objects.requireNonNull(m0, "Message m0 cannot be null");
         Objects.requireNonNull(m1, "Message m1 cannot be null");
 
-        this.p = publicKey.getP();
-        this.g = publicKey.getG();
+        this.params = publicKey.getParams(); // Get DomainParameters from PublicKey
         this.h = publicKey.getY();
         this.c1 = ciphertext.getC1();
         this.c2 = ciphertext.getC2();
@@ -39,14 +38,17 @@ public class DisjunctiveChaumPedersenStatement implements Statement {
         this.m1 = m1;
 
         // Basic validation (could add more checks)
-        if (p == null || g == null || h == null || c1 == null || c2 == null) {
-            throw new IllegalArgumentException("Public key or ciphertext components cannot be null");
+        // Validation: Ensure necessary components are present
+        if (params == null || h == null || c1 == null || c2 == null) {
+            throw new IllegalArgumentException("DomainParameters, public key value (h), or ciphertext components cannot be null");
         }
     }
 
     // Getters for all fields
-    public BigInteger getP() { return p; }
-    public BigInteger getG() { return g; }
+    public BigInteger getP() { return params.getP(); }
+    public BigInteger getG() { return params.getG(); }
+    public BigInteger getQ() { return params.getQ(); } // Added getter for q
+    public DomainParameters getParams() { return params; } // Added getter for params object
     public BigInteger getH() { return h; }
     public BigInteger getC1() { return c1; }
     public BigInteger getC2() { return c2; }
@@ -58,8 +60,7 @@ public class DisjunctiveChaumPedersenStatement implements Statement {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         DisjunctiveChaumPedersenStatement that = (DisjunctiveChaumPedersenStatement) o;
-        return Objects.equals(p, that.p) &&
-               Objects.equals(g, that.g) &&
+        return Objects.equals(params, that.params) &&
                Objects.equals(h, that.h) &&
                Objects.equals(c1, that.c1) &&
                Objects.equals(c2, that.c2) &&
@@ -69,14 +70,13 @@ public class DisjunctiveChaumPedersenStatement implements Statement {
 
     @Override
     public int hashCode() {
-        return Objects.hash(p, g, h, c1, c2, m0, m1);
+        return Objects.hash(params, h, c1, c2, m0, m1);
     }
 
     @Override
     public String toString() {
         return "DisjunctiveChaumPedersenStatement{" +
-               "p=" + p +
-               ", g=" + g +
+               "params=" + params +
                ", h=" + h +
                ", c1=" + c1 +
                ", c2=" + c2 +

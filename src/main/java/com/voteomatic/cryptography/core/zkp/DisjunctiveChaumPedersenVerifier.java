@@ -1,5 +1,6 @@
 package com.voteomatic.cryptography.core.zkp;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 
@@ -30,8 +31,11 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
         DisjunctiveChaumPedersenStatement stmt = (DisjunctiveChaumPedersenStatement) statement;
         DisjunctiveChaumPedersenProof prf = (DisjunctiveChaumPedersenProof) proof;
 
-        BigInteger p = stmt.getP();
-        BigInteger g = stmt.getG();
+        // Retrieve parameters from the statement
+        DomainParameters params = stmt.getParams();
+        BigInteger p = params.getP();
+        BigInteger g = params.getG();
+        BigInteger q = params.getQ(); // Use the correct subgroup order q
         BigInteger h = stmt.getH();
         BigInteger c1 = stmt.getC1(); // g^r
         BigInteger c2 = stmt.getC2(); // m*h^r
@@ -47,8 +51,8 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
         BigInteger c1_challenge = prf.getC1(); // Renamed from c1 to avoid clash
         BigInteger r1 = prf.getR1();
 
-        // Use p-1 as the order q for simplicity. Match the prover.
-        BigInteger q = p.subtract(BigInteger.ONE);
+        // Removed incorrect calculation: q = p - 1
+        // q is now correctly retrieved from DomainParameters
 
         try {
             // 1. Recalculate the overall challenge c' = H(public values || commitments)

@@ -1,11 +1,14 @@
 package com.voteomatic.cryptography;
 
+import com.voteomatic.cryptography.core.DomainParameters; // Added import
 import com.voteomatic.cryptography.core.elgamal.ElGamalCipher;
 import com.voteomatic.cryptography.core.elgamal.ElGamalCipherImpl;
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 // Removed InMemoryKeyStorageHandler import
-import com.voteomatic.cryptography.io.KeyStorageHandler; // Keep if needed elsewhere, or remove if KeyService is the only user
+import com.voteomatic.cryptography.io.DataHandlingException; // Added import
+import com.voteomatic.cryptography.io.KeyStorageHandler;
+import com.voteomatic.cryptography.io.PKCS12KeyStorageHandler; // Added import
 // Import specific ZKP classes needed
 import com.voteomatic.cryptography.core.zkp.*;
 import com.voteomatic.cryptography.keymanagement.KeyManagementException;
@@ -34,7 +37,10 @@ public class EndToEndTest {
     // Using smaller, standard values for testing convenience. p=107 (prime), g=2 (generator)
     // Using a larger 512-bit safe prime (RFC 3526 Group 2) for testing
     private static final BigInteger P = new BigInteger("FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3DC2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA051015728E5A8AACAA68FFFFFFFFFFFFFFFF", 16);
-    private static final BigInteger G = new BigInteger("2");
+    private static final BigInteger G_VAL = new BigInteger("2");
+    // For RFC 3526 Group 2 (safe prime p = 2q + 1), q = (p-1)/2
+    private static final BigInteger Q = P.subtract(BigInteger.ONE).divide(BigInteger.TWO);
+    private static final DomainParameters DOMAIN_PARAMS = new DomainParameters(P, G_VAL, Q);
 
     private KeyService keyService;
     private VoteService voteService;
@@ -47,8 +53,8 @@ public class EndToEndTest {
 
 
     @BeforeEach
-    void setUp() throws KeyManagementException { // Add throws for the new KeyServiceImpl constructor
-        // Removed keyStorageHandler instantiation
+    void setUp() throws KeyManagementException, DataHandlingException { // Add throws for handlers
+        KeyStorageHandler keyStorageHandler = new PKCS12KeyStorageHandler("test_e2e_keystore.p12", "testpass".toCharArray()); // Instantiate default handler for test
         secureRandomGenerator = new SecureRandomGeneratorImpl();
         hashAlgorithm = new SHA256HashAlgorithm(); // Instantiate the hash algorithm
         // Instantiate the new Disjunctive Chaum-Pedersen prover and verifier
@@ -56,7 +62,7 @@ public class EndToEndTest {
         verifier = new DisjunctiveChaumPedersenVerifier(hashAlgorithm);
 
         // Instantiate services. KeyServiceImpl now uses its default constructor.
-        keyService = new KeyServiceImpl(P, G); // Uses default PKCS12 handler internally
+        keyService = new KeyServiceImpl(DOMAIN_PARAMS, keyStorageHandler, secureRandomGenerator); // Use the correct constructor
         elGamalCipher = new ElGamalCipherImpl(secureRandomGenerator);
         voteService = new VoteServiceImpl(elGamalCipher, keyService, prover, verifier);
     }
@@ -98,7 +104,7 @@ public class EndToEndTest {
 
         // 4.5 Verify Proofs (Optional but recommended in E2E)
         BigInteger m0 = BigInteger.ONE; // g^0
-        BigInteger m1 = G;             // g^1
+        BigInteger m1 = publicKey.getG(); // Use generator from the actual public key's parameters
 
         // Verify Yes Vote 1
         DisjunctiveChaumPedersenStatement stmtYes1 = new DisjunctiveChaumPedersenStatement(publicKey, encryptedVoteYes1.getVoteCiphertext(), m0, m1);
