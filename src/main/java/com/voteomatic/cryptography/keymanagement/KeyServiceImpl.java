@@ -4,8 +4,9 @@ import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
+import com.voteomatic.cryptography.io.PKCS12KeyStorageHandler;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
-
+import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -43,6 +44,29 @@ public class KeyServiceImpl implements KeyService {
         this.keyStorageHandler = Objects.requireNonNull(keyStorageHandler, "KeyStorageHandler cannot be null.");
         this.secureRandomGenerator = Objects.requireNonNull(secureRandomGenerator, "SecureRandomGenerator cannot be null.");
         // Consider adding validation for p (primality) and g (generator properties) here or elsewhere.
+    }
+
+    /**
+     * Constructs a KeyServiceImpl using the default PKCS12KeyStorageHandler.
+     * The keystore will be located at "voteomatic_keystore.p12" and use a placeholder password.
+     *
+     * @param p The prime modulus (p) for ElGamal operations. Must be non-null.
+     * @param g The generator (g) for ElGamal operations. Must be non-null.
+     * @throws KeyManagementException If the default KeyStorageHandler cannot be initialized.
+     */
+    public KeyServiceImpl(BigInteger p, BigInteger g) throws KeyManagementException {
+        this(p, g, createDefaultKeyStorageHandler(), new SecureRandomGeneratorImpl());
+    }
+
+    private static KeyStorageHandler createDefaultKeyStorageHandler() throws KeyManagementException {
+        try {
+            String defaultKeystorePath = "voteomatic_keystore.p12";
+            // TODO: Securely load keystore password instead of using a placeholder.
+            char[] defaultPassword = "changeit".toCharArray();
+            return new PKCS12KeyStorageHandler(defaultKeystorePath, defaultPassword);
+        } catch (DataHandlingException e) {
+            throw new KeyManagementException("Failed to initialize default PKCS12KeyStorageHandler", e);
+        }
     }
 
     @Override

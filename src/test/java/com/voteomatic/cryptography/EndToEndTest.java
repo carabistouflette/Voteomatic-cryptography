@@ -4,8 +4,8 @@ import com.voteomatic.cryptography.core.elgamal.ElGamalCipher;
 import com.voteomatic.cryptography.core.elgamal.ElGamalCipherImpl;
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
-import com.voteomatic.cryptography.io.InMemoryKeyStorageHandler;
-import com.voteomatic.cryptography.io.KeyStorageHandler;
+// Removed InMemoryKeyStorageHandler import
+import com.voteomatic.cryptography.io.KeyStorageHandler; // Keep if needed elsewhere, or remove if KeyService is the only user
 // Import specific ZKP classes needed
 import com.voteomatic.cryptography.core.zkp.*;
 import com.voteomatic.cryptography.keymanagement.KeyManagementException;
@@ -39,7 +39,7 @@ public class EndToEndTest {
     private KeyService keyService;
     private VoteService voteService;
     private ElGamalCipher elGamalCipher;
-    private KeyStorageHandler keyStorageHandler;
+    // Removed keyStorageHandler field, KeyServiceImpl manages its own handler now
     private SecureRandomGenerator secureRandomGenerator;
     private ZkpProver prover; // Will be DisjunctiveChaumPedersenProver
     private ZkpVerifier verifier; // Will be DisjunctiveChaumPedersenVerifier
@@ -47,16 +47,16 @@ public class EndToEndTest {
 
 
     @BeforeEach
-    void setUp() {
-        keyStorageHandler = new InMemoryKeyStorageHandler();
+    void setUp() throws KeyManagementException { // Add throws for the new KeyServiceImpl constructor
+        // Removed keyStorageHandler instantiation
         secureRandomGenerator = new SecureRandomGeneratorImpl();
         hashAlgorithm = new SHA256HashAlgorithm(); // Instantiate the hash algorithm
         // Instantiate the new Disjunctive Chaum-Pedersen prover and verifier
         prover = new DisjunctiveChaumPedersenProver(secureRandomGenerator, hashAlgorithm);
         verifier = new DisjunctiveChaumPedersenVerifier(hashAlgorithm);
 
-        // Instantiate services with all required dependencies
-        keyService = new KeyServiceImpl(P, G, keyStorageHandler, secureRandomGenerator);
+        // Instantiate services. KeyServiceImpl now uses its default constructor.
+        keyService = new KeyServiceImpl(P, G); // Uses default PKCS12 handler internally
         elGamalCipher = new ElGamalCipherImpl(secureRandomGenerator);
         voteService = new VoteServiceImpl(elGamalCipher, keyService, prover, verifier);
     }
