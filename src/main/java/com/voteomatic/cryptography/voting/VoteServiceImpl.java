@@ -8,7 +8,9 @@ import com.voteomatic.cryptography.core.zkp.*;
 import com.voteomatic.cryptography.keymanagement.KeyService;
 
 import java.math.BigInteger;
+import java.util.HashMap; // Added import
 import java.util.List;
+import java.util.Map; // Added import
 import java.util.Objects;
 
 /**
@@ -16,32 +18,56 @@ import java.util.Objects;
  */
 public class VoteServiceImpl implements VoteService {
 
+    private static final int MAX_VOTES = 10000; // Maximum expected votes for precomputation
+
     private final ElGamalCipher elGamalCipher;
     private final KeyService keyService;
     private final ZkpProver prover;
     private final ZkpVerifier verifier;
+    private final Map<BigInteger, Integer> discreteLogMap; // Precomputed map for g^m -> m
 
     /**
-     * Constructs a VoteServiceImpl with required dependencies.
+     * Constructs a VoteServiceImpl with required dependencies and precomputes the discrete log map.
      *
+     * @param params        The domain parameters (p, q, g) for the election.
      * @param elGamalCipher The ElGamal cipher implementation.
      * @param keyService    The key service implementation.
-     * @param prover        The Zero-Knowledge Proof prover (e.g., SchnorrProver).
-     * @param verifier      The Zero-Knowledge Proof verifier (e.g., SchnorrVerifier).
+     * @param prover        The Zero-Knowledge Proof prover (e.g., DisjunctiveChaumPedersenProver).
+     * @param verifier      The Zero-Knowledge Proof verifier (e.g., DisjunctiveChaumPedersenVerifier).
      */
-    public VoteServiceImpl(ElGamalCipher elGamalCipher, KeyService keyService, ZkpProver prover, ZkpVerifier verifier) {
+    public VoteServiceImpl(DomainParameters params, ElGamalCipher elGamalCipher, KeyService keyService, ZkpProver prover, ZkpVerifier verifier) {
+        Objects.requireNonNull(params, "DomainParameters cannot be null");
         this.elGamalCipher = Objects.requireNonNull(elGamalCipher, "ElGamalCipher cannot be null");
         this.keyService = Objects.requireNonNull(keyService, "KeyService cannot be null");
         this.prover = Objects.requireNonNull(prover, "ZkpProver cannot be null");
         this.verifier = Objects.requireNonNull(verifier, "ZkpVerifier cannot be null");
 
-        // Optional: Add checks to ensure prover/verifier are Schnorr instances if strictly required
-        // if (!(prover instanceof SchnorrProver)) {
-        //     throw new IllegalArgumentException("Prover must be an instance of SchnorrProver");
-        // }
-        // if (!(verifier instanceof SchnorrVerifier)) {
-        //     throw new IllegalArgumentException("Verifier must be an instance of SchnorrVerifier");
-        // }
+        // Precompute the discrete logarithm map for efficient tallying
+        this.discreteLogMap = precomputeDiscreteLogMap(params, MAX_VOTES);
+
+        // Optional: Add checks for prover/verifier types if needed
+        // if (!(prover instanceof DisjunctiveChaumPedersenProver)) { ... }
+        // if (!(verifier instanceof DisjunctiveChaumPedersenVerifier)) { ... }
+    }
+
+    /**
+     * Precomputes a map from g^i mod p to i for efficient discrete logarithm lookup during tallying.
+     *
+     * @param params The domain parameters containing g and p.
+     * @param max    The maximum value of the exponent i (e.g., MAX_VOTES).
+     * @return A map where keys are g^i mod p and values are i.
+     */
+    private Map<BigInteger, Integer> precomputeDiscreteLogMap(DomainParameters params, int max) {
+        BigInteger g = params.getG();
+        BigInteger p = params.getP();
+        Map<BigInteger, Integer> map = new HashMap<>(max + 1);
+        BigInteger gPowI = BigInteger.ONE; // Start with g^0
+
+        for (int i = 0; i <= max; i++) {
+            map.put(gPowI, i);
+            gPowI = gPowI.multiply(g).mod(p); // Calculate g^(i+1) for the next iteration
+        }
+        return map;
     }
 
     @Override
@@ -158,27 +184,20 @@ public class VoteServiceImpl implements VoteService {
             // Find k by solving the discrete logarithm g^k = decryptedResultGk (mod p)
             // Since k represents the count of "Yes" votes (encoded as g^1),
             // we can find it by trial exponentiation for small k.
-            BigInteger g = params.getG(); // Get generator from private key's DomainParameters
-            BigInteger currentGPower = BigInteger.ONE; // Start with g^0
-            BigInteger k = BigInteger.ZERO;
+            // Look up the tally count (k) using the precomputed discrete log map
+            Integer voteCount = this.discreteLogMap.get(decryptedResultGk);
 
-            // Set a reasonable limit to prevent infinite loops in unexpected scenarios
-            // The maximum possible value for k is the number of votes cast.
-            int maxIterations = encryptedVotes.size();
-
-            for (int i = 0; i <= maxIterations; i++) {
-                if (currentGPower.equals(decryptedResultGk)) {
-                    return k; // Found the tally k
-                }
-                // Calculate next power: g^(i+1) = g^i * g mod p
-                currentGPower = currentGPower.multiply(g).mod(p);
-                k = k.add(BigInteger.ONE);
+            if (voteCount == null) {
+                // If the decrypted result is not in the map, it's either invalid
+                // or exceeds the precomputed maximum (MAX_VOTES).
+                throw new VotingException(
+                    "Could not determine the vote tally (k) from the decrypted result. " +
+                    "The result (" + decryptedResultGk + ") was not found in the precomputed map. " +
+                    "It might be invalid or exceed the maximum precomputed tally of " + MAX_VOTES + "."
+                );
             }
 
-            // If the loop finishes without finding k, something is wrong.
-            // This might happen if the decrypted result is not a power of g,
-            // indicating potential corruption or an issue in the crypto implementation.
-            throw new VotingException("Could not determine the vote tally (k) from the decrypted result (g^k). Decrypted value: " + decryptedResultGk);
+            return BigInteger.valueOf(voteCount); // Return the tally k
 
         } catch (Exception e) {
             // Wrap decryption or tally interpretation error

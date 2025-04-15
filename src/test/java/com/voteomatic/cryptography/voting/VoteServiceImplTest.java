@@ -42,7 +42,10 @@ class VoteServiceImplTest {
     @Mock
     private ZkpVerifier verifier; // Use generic interface
 
-    @InjectMocks
+    @Mock
+    private DomainParameters domainParameters;
+
+    // @InjectMocks removed - instance will be created in setUp
     private VoteServiceImpl voteService;
 
     // Test Data - Initialize as needed in tests or @BeforeEach
@@ -69,7 +72,13 @@ class VoteServiceImplTest {
         BigInteger g_val = new BigInteger("2");  // Common generator candidate
         // Assuming p is a safe prime, q = (p-1)/2
         BigInteger q_val = p_val.subtract(BigInteger.ONE).divide(BigInteger.TWO);
-        domainParams = new DomainParameters(p_val, g_val, q_val);
+        domainParams = new DomainParameters(p_val, g_val, q_val); // Keep real one for other tests if needed
+
+        // Stub the mocked domainParameters needed by VoteServiceImpl constructor (called via @InjectMocks)
+        // Use lenient() as these might not be needed if constructor logic changes or in all tests.
+        lenient().when(domainParameters.getP()).thenReturn(p_val);
+        lenient().when(domainParameters.getG()).thenReturn(g_val);
+        // Note: q is not directly used in the constructor's precomputation based on VoteServiceImpl code.
 
         BigInteger x = new BigInteger("198765432109876543210987654321"); // Example private key < q
         BigInteger y = domainParams.getG().modPow(x, domainParams.getP()); // y = g^x mod p
@@ -97,34 +106,37 @@ class VoteServiceImplTest {
         mockDcpStatement = mock(DisjunctiveChaumPedersenStatement.class);
         mockDcpProof = mock(DisjunctiveChaumPedersenProof.class);
         mockRandomness = new BigInteger("987654321"); // Example dummy randomness
+
+        // Explicitly instantiate voteService after mocks are set up
+        voteService = new VoteServiceImpl(domainParameters, elGamalCipher, keyService, prover, verifier);
     }
 
     // --- Constructor Tests ---
     @Test
     void constructor_nullElGamalCipher_throwsException() {
         assertThrows(NullPointerException.class, () -> {
-            new VoteServiceImpl(null, keyService, prover, verifier);
+            new VoteServiceImpl(domainParams, null, keyService, prover, verifier);
         });
     }
 
     @Test
     void constructor_nullKeyService_throwsException() {
         assertThrows(NullPointerException.class, () -> {
-            new VoteServiceImpl(elGamalCipher, null, prover, verifier);
+            new VoteServiceImpl(domainParams, elGamalCipher, null, prover, verifier);
         });
     }
 
     @Test
     void constructor_nullProver_throwsException() {
         assertThrows(NullPointerException.class, () -> {
-            new VoteServiceImpl(elGamalCipher, keyService, null, verifier);
+            new VoteServiceImpl(domainParams, elGamalCipher, keyService, null, verifier);
         });
     }
 
     @Test
     void constructor_nullVerifier_throwsException() {
         assertThrows(NullPointerException.class, () -> {
-            new VoteServiceImpl(elGamalCipher, keyService, prover, null);
+            new VoteServiceImpl(domainParams, elGamalCipher, keyService, prover, null);
         });
     }
 
@@ -461,8 +473,8 @@ class VoteServiceImplTest {
         });
 
         // Assert the exact message to pinpoint discrepancies
-        // Expect the wrapped exception message
-        assertEquals("Error during final tally decryption or interpretation: Could not determine the vote tally (k) from the decrypted result (g^k). Decrypted value: 10", thrown.getMessage());
+        // Expect the new wrapped exception message reflecting the precomputed map lookup failure
+        assertEquals("Error during final tally decryption or interpretation: Could not determine the vote tally (k) from the decrypted result. The result (10) was not found in the precomputed map. It might be invalid or exceed the maximum precomputed tally of 10000.", thrown.getMessage());
         verify(elGamalCipher, times(1)).decrypt(eq(samplePrivateKey), eq(expectedProductCiphertext));
     }
 

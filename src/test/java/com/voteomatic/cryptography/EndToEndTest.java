@@ -64,7 +64,7 @@ public class EndToEndTest {
         // Instantiate services. KeyServiceImpl now uses its default constructor.
         keyService = new KeyServiceImpl(DOMAIN_PARAMS, keyStorageHandler, secureRandomGenerator); // Use the correct constructor
         elGamalCipher = new ElGamalCipherImpl(secureRandomGenerator);
-        voteService = new VoteServiceImpl(elGamalCipher, keyService, prover, verifier);
+        voteService = new VoteServiceImpl(DOMAIN_PARAMS, elGamalCipher, keyService, prover, verifier);
     }
 
     @Test

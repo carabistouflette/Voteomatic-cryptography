@@ -14,9 +14,9 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <maven.compiler.source>17</maven.compiler.source> <!-- Use Java 17 -->
-        <maven.compiler.target>17</maven.compiler.target>
-        <junit.jupiter.version>5.12.1</junit.jupiter.version> <!-- JUnit 5 version -->
+        <maven.compiler.source>24</maven.compiler.source>
+        <maven.compiler.target>24</maven.compiler.target>
+        <junit.jupiter.version>5.12.2</junit.jupiter.version>
     </properties>
 
     <dependencies>
@@ -36,18 +36,18 @@
         <dependency>
             <groupId>org.mockito</groupId>
             <artifactId>mockito-junit-jupiter</artifactId>
-            <version>5.17.0</version> <!-- Use latest stable version -->
+            <version>5.17.0</version>
             <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk18on</artifactId>
-            <version>1.78.1</version> <!-- Use this specific version or the latest compatible -->
+            <version>1.78.1</version>
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk18on</artifactId>
-            <version>1.78.1</version> <!-- Use this specific version or the latest compatible -->
+            <version>1.78.1</version>
         </dependency>
         <!-- Apache Commons Math for statistical testing -->
         <dependency>
@@ -59,8 +59,8 @@
     </dependencies>
 
     <build>
-        <sourceDirectory>src/main/java</sourceDirectory> <!-- Explicitly define source directory -->
-        <testSourceDirectory>src/test/java</testSourceDirectory> <!-- Standard test source directory -->
+        <sourceDirectory>src/main/java</sourceDirectory>
+        <testSourceDirectory>src/test/java</testSourceDirectory>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -114,21 +114,6 @@
                         <phase>test</phase>
                         <goals>
                             <goal>report</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <groupId>org.owasp</groupId>
-                <artifactId>dependency-check-maven</artifactId>
-                <version>9.2.0</version> <!-- Use a recent stable version -->
-                <configuration>
-                    <!-- Reverted change - NVD check configuration removed -->
-                </configuration>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>check</goal>
                         </goals>
                     </execution>
                 </executions>

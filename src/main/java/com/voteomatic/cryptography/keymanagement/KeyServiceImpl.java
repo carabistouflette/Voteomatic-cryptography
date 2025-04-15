@@ -78,8 +78,12 @@ public class KeyServiceImpl implements KeyService {
     private static KeyStorageHandler createDefaultKeyStorageHandler() throws KeyManagementException {
         try {
             String defaultKeystorePath = "voteomatic_keystore.p12";
-            // TODO: Securely load keystore password instead of using a placeholder.
-            char[] defaultPassword = "changeit".toCharArray();
+            // Load keystore password from environment variable
+            String keystorePassword = System.getenv("KEYSTORE_PASSWORD");
+            if (keystorePassword == null || keystorePassword.trim().isEmpty()) {
+                throw new KeyManagementException("KEYSTORE_PASSWORD environment variable not set or empty.");
+            }
+            char[] defaultPassword = keystorePassword.toCharArray();
             return new PKCS12KeyStorageHandler(defaultKeystorePath, defaultPassword);
         } catch (DataHandlingException e) {
             throw new KeyManagementException("Failed to initialize default PKCS12KeyStorageHandler", e);

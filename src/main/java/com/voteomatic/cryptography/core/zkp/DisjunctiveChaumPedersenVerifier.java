@@ -6,6 +6,8 @@ import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 
 import java.math.BigInteger;
 import java.util.Objects;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 /**
  * Implements the verifier logic for the Disjunctive Chaum-Pedersen ZKP scheme.
@@ -56,7 +58,13 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
 
         try {
             // 1. Recalculate the overall challenge c' = H(public values || commitments)
-            BigInteger calculated_c = calculateChallenge(p, g, h, c1, c2, m0, m1, a0, b0, a1, b1, q);
+            // Use the same serialization as the prover.
+            BigInteger calculated_c;
+            try {
+                 calculated_c = calculateChallenge(p, g, h, c1, c2, m0, m1, a0, b0, a1, b1, q);
+            } catch (IOException e) {
+                 throw new ZkpException("Failed to serialize data for challenge recalculation: " + e.getMessage(), e);
+            }
 
             // 2. Check if c' == c0 + c1 (mod q)
             boolean challengeCheck = calculated_c.equals(c0.add(c1_challenge).mod(q));
@@ -111,8 +119,8 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
             // If all checks pass, the proof is valid
             return true;
 
-        } catch (SecurityUtilException | ArithmeticException e) {
-            // Treat calculation errors during verification as proof failure
+        } catch (SecurityUtilException | ArithmeticException | ZkpException e) { // Added ZkpException for serialization errors
+            // Treat calculation errors or serialization errors during verification as proof failure
             // Log the error for debugging if necessary
             // System.err.println("Error during verification: " + e.getMessage());
             return false;
@@ -128,39 +136,40 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
     private BigInteger calculateChallenge(BigInteger p, BigInteger g, BigInteger h,
                                           BigInteger c1, BigInteger c2, BigInteger m0, BigInteger m1,
                                           BigInteger a0, BigInteger b0, BigInteger a1, BigInteger b1,
-                                          BigInteger q) throws SecurityUtilException {
-        // Concatenate byte representations - MUST match prover's implementation
-        byte[] pBytes = p.toByteArray();
-        byte[] gBytes = g.toByteArray();
-        byte[] hBytes = h.toByteArray();
-        byte[] c1Bytes = c1.toByteArray();
-        byte[] c2Bytes = c2.toByteArray();
-        byte[] m0Bytes = m0.toByteArray();
-        byte[] m1Bytes = m1.toByteArray();
-        byte[] a0Bytes = a0.toByteArray();
-        byte[] b0Bytes = b0.toByteArray();
-        byte[] a1Bytes = a1.toByteArray();
-        byte[] b1Bytes = b1.toByteArray();
+                                          BigInteger q) throws SecurityUtilException, IOException { // Added IOException
+       // Serialize inputs using length-prefixing - MUST match prover's implementation
+       byte[] inputBytes = serializeForChallenge(p, g, h, c1, c2, m0, m1, a0, b0, a1, b1);
 
-        int totalLength = pBytes.length + gBytes.length + hBytes.length + c1Bytes.length + c2Bytes.length +
-                          m0Bytes.length + m1Bytes.length + a0Bytes.length + b0Bytes.length + a1Bytes.length + b1Bytes.length;
-        byte[] inputBytes = new byte[totalLength];
-        int offset = 0;
-        System.arraycopy(pBytes, 0, inputBytes, offset, pBytes.length); offset += pBytes.length;
-        System.arraycopy(gBytes, 0, inputBytes, offset, gBytes.length); offset += gBytes.length;
-        System.arraycopy(hBytes, 0, inputBytes, offset, hBytes.length); offset += hBytes.length;
-        System.arraycopy(c1Bytes, 0, inputBytes, offset, c1Bytes.length); offset += c1Bytes.length;
-        System.arraycopy(c2Bytes, 0, inputBytes, offset, c2Bytes.length); offset += c2Bytes.length;
-        System.arraycopy(m0Bytes, 0, inputBytes, offset, m0Bytes.length); offset += m0Bytes.length;
-        System.arraycopy(m1Bytes, 0, inputBytes, offset, m1Bytes.length); offset += m1Bytes.length;
-        System.arraycopy(a0Bytes, 0, inputBytes, offset, a0Bytes.length); offset += a0Bytes.length;
-        System.arraycopy(b0Bytes, 0, inputBytes, offset, b0Bytes.length); offset += b0Bytes.length;
-        System.arraycopy(a1Bytes, 0, inputBytes, offset, a1Bytes.length); offset += a1Bytes.length;
-        System.arraycopy(b1Bytes, 0, inputBytes, offset, b1Bytes.length);
+       byte[] hash = hashAlgorithm.hash(inputBytes);
+       BigInteger challenge = new BigInteger(1, hash); // Ensure positive
 
-        byte[] hash = hashAlgorithm.hash(inputBytes);
-        BigInteger challenge = new BigInteger(1, hash); // Ensure positive
+       return challenge.mod(q); // Reduce modulo q
+   }
 
-        return challenge.mod(q); // Reduce modulo q
-    }
+   /**
+    * Serializes multiple BigIntegers into a single byte array using length-prefixing.
+    * Each BigInteger's byte array (from toByteArray()) is preceded by its length
+    * encoded as a 4-byte big-endian integer. This ensures unambiguous parsing.
+    * MUST match the implementation in the Prover exactly.
+    *
+    * @param values The BigIntegers to serialize.
+    * @return A byte array containing the length-prefixed serialized data.
+    * @throws IOException If an I/O error occurs during serialization.
+    */
+   private byte[] serializeForChallenge(BigInteger... values) throws IOException {
+       ByteArrayOutputStream baos = new ByteArrayOutputStream();
+       for (BigInteger val : values) {
+           byte[] bytes = val.toByteArray();
+           int length = bytes.length;
+           // Write length as 4-byte big-endian integer
+           baos.write((length >> 24) & 0xFF);
+           baos.write((length >> 16) & 0xFF);
+           baos.write((length >> 8) & 0xFF);
+           baos.write(length & 0xFF);
+           // Write the actual byte data
+           baos.write(bytes);
+       }
+       return baos.toByteArray();
+   }
+
 }
