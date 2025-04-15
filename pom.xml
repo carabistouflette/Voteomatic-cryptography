@@ -122,6 +122,9 @@
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
                 <version>9.2.0</version> <!-- Use a recent stable version -->
+                <configuration>
+                    <!-- Reverted change - NVD check configuration removed -->
+                </configuration>
                 <executions>
                     <execution>
                         <goals>

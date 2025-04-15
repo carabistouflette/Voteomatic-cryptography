@@ -7,13 +7,12 @@ import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.nio.file.Files;
@@ -25,17 +24,19 @@ import java.security.cert.X509Certificate;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
-import org.bouncycastle.jce.provider.BouncyCastleProvider; // Added for BC provider registration
 
 import static org.junit.jupiter.api.Assertions.*;
-
-// Requires setting an environment variable for the password.
-// We can use a library like System Rules or Testcontainers for better env var management in tests,
-// but for simplicity, we'll assume manual setup or skip if not set.
-// Example: export TEST_KEYSTORE_PASSWORD='testpassword'
-// Example: export TEST_KEYSTORE_WRONG_PASSWORD='wrongpassword'
-// @DisabledIfEnvironmentVariable(named = "TEST_KEYSTORE_PASSWORD", matches = ".*", disabledReason = "TEST_KEYSTORE_PASSWORD environment variable not set")
-// @DisabledIfEnvironmentVariable(named = "TEST_KEYSTORE_WRONG_PASSWORD", matches = ".*", disabledReason = "TEST_KEYSTORE_WRONG_PASSWORD environment variable not set for incorrect password test")
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
+ 
+ // Tests involving environment variables require setup before running tests.
+ // Example:
+ // export TEST_KEYSTORE_PASSWORD_ENV='envPassword123'
+ // export TEST_KEYSTORE_PASSWORD_ENV_EMPTY=''
+ // export TEST_KEYSTORE_PASSWORD_ENV_WRONG='wrongEnvPassword'
+ //
+ // @DisabledIfEnvironmentVariable annotations were previously used but commented out.
+ // Using Assumptions.assumeTrue() provides a way to skip tests if variables aren't set,
+ // preventing failures in environments without the necessary setup.
 // Temporarily disable env var check for easier local testing if needed, re-enable for CI.
 class PKCS12KeyStorageHandlerTest {
 
@@ -48,11 +49,15 @@ class PKCS12KeyStorageHandlerTest {
     private static final char[] KEYSTORE_PASSWORD = "testpassword".toCharArray();
     private static final char[] WRONG_KEYSTORE_PASSWORD = "wrongpassword".toCharArray();
     private static final char[] KEY_ENTRY_PASSWORD = "keypassword".toCharArray(); // Password for the key entry itself
+    private static final String KEYSTORE_TYPE = "PKCS12"; // Define for use in tests
 
-    // Re-enable env var usage if required:
-    // private static final String TEST_PASSWORD_ENV_VAR = "TEST_KEYSTORE_PASSWORD";
-    // private static final String TEST_WRONG_PASSWORD_ENV_VAR = "TEST_KEYSTORE_WRONG_PASSWORD";
-    // private static final String PASSWORD_SOURCE = "env:" + TEST_PASSWORD_ENV_VAR;
+    // Environment variable names used in tests
+    private static final String TEST_PASSWORD_ENV_VAR = "TEST_KEYSTORE_PASSWORD_ENV";
+    private static final String TEST_PASSWORD_ENV_EMPTY_VAR = "TEST_KEYSTORE_PASSWORD_ENV_EMPTY";
+    private static final String TEST_PASSWORD_ENV_WRONG_VAR = "TEST_KEYSTORE_PASSWORD_ENV_WRONG";
+    private static final String PASSWORD_SOURCE_VALID = "env:" + TEST_PASSWORD_ENV_VAR;
+    private static final String PASSWORD_SOURCE_EMPTY = "env:" + TEST_PASSWORD_ENV_EMPTY_VAR;
+    private static final String PASSWORD_SOURCE_WRONG = "env:" + TEST_PASSWORD_ENV_WRONG_VAR; // For testing load failure with env var password
     // private static final String WRONG_PASSWORD_SOURCE = "env:" + TEST_WRONG_PASSWORD_ENV_VAR;
 
     private static KeyPair testKeyPair;
@@ -339,7 +344,259 @@ class PKCS12KeyStorageHandlerTest {
             }
         }
     }
-    // Note: Removed testInitializationCreatesDirectory as the constructor now handles this,
-    // and testing constructor side effects directly can be brittle.
-    // The setUp() method implicitly relies on this directory creation.
+
+    // =========================================================================
+    // Tests for Constructor with String passwordSource (Environment Variable)
+    // =========================================================================
+
+    @Test
+    void testConstructorWithValidEnvPasswordSource() throws DataHandlingException {
+        String envPassword = System.getenv(TEST_PASSWORD_ENV_VAR);
+        assumeTrue(envPassword != null && !envPassword.isEmpty(),
+                     TEST_PASSWORD_ENV_VAR + " environment variable must be set for this test.");
+
+        Path envKeystorePath = tempDir.resolve("env_keystore_valid.p12");
+        PKCS12KeyStorageHandler envHandler = new PKCS12KeyStorageHandler(envKeystorePath.toString(), PASSWORD_SOURCE_VALID);
+
+        assertNotNull(envHandler, "Handler should be created successfully with valid env var password source.");
+        // We can optionally try a simple operation to ensure the password was likely correct
+        assertDoesNotThrow(() -> envHandler.storeKeyPair("envTest", testKeyPair, testCertificate, KEY_ENTRY_PASSWORD),
+                           "Storing a key should succeed with handler initialized via env var.");
+        assertTrue(Files.exists(envKeystorePath), "Keystore file should be created by handler initialized via env var.");
+    }
+
+    @Test
+    void testConstructorWithUnsetEnvPasswordSource() {
+        // Ensure the variable is unset for this test's scope (cannot be done reliably in-process)
+        // We rely on the assumption that a unique, unset variable name is used.
+        String unsetEnvVar = "THIS_ENV_VAR_SHOULD_REALLY_NOT_BE_SET_EVER";
+        assumeTrue(System.getenv(unsetEnvVar) == null,
+                     unsetEnvVar + " environment variable must NOT be set for this test.");
+
+        String passwordSourceUnset = "env:" + unsetEnvVar;
+        Path envKeystorePath = tempDir.resolve("env_keystore_unset.p12");
+
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            new PKCS12KeyStorageHandler(envKeystorePath.toString(), passwordSourceUnset);
+        }, "Constructor should fail if environment variable is not set.");
+
+        assertTrue(exception.getMessage().contains("not set or empty"),
+                   "Exception message should indicate the environment variable was not set or empty.");
+    }
+
+    @Test
+    void testConstructorWithEmptyEnvPasswordSource() {
+        String envPasswordEmpty = System.getenv(TEST_PASSWORD_ENV_EMPTY_VAR);
+        assumeTrue(envPasswordEmpty != null && envPasswordEmpty.isEmpty(),
+                     TEST_PASSWORD_ENV_EMPTY_VAR + " environment variable must be set to an empty string for this test.");
+
+        Path envKeystorePath = tempDir.resolve("env_keystore_empty.p12");
+
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            new PKCS12KeyStorageHandler(envKeystorePath.toString(), PASSWORD_SOURCE_EMPTY);
+        }, "Constructor should fail if environment variable is empty.");
+
+        assertTrue(exception.getMessage().contains("not set or empty"),
+                   "Exception message should indicate the environment variable was not set or empty.");
+    }
+
+    @Test
+    void testConstructorWithInvalidPasswordSourceFormat() {
+        String invalidSource = "file:/path/to/password"; // Example of an unsupported format
+        Path envKeystorePath = tempDir.resolve("env_keystore_invalid_format.p12");
+
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            new PKCS12KeyStorageHandler(envKeystorePath.toString(), invalidSource);
+        }, "Constructor should fail with unsupported password source format.");
+
+        assertTrue(exception.getMessage().contains("Unsupported password source format"),
+                   "Exception message should indicate unsupported format. Message: " + exception.getMessage());
+    }
+
+    // Test loading failure when using the env var constructor but providing the wrong password via env var
+    @Test
+    void testLoadKeystoreWithIncorrectEnvPassword() throws DataHandlingException {
+        String correctEnvPassword = System.getenv(TEST_PASSWORD_ENV_VAR);
+        String wrongEnvPassword = System.getenv(TEST_PASSWORD_ENV_WRONG_VAR);
+        assumeTrue(correctEnvPassword != null && !correctEnvPassword.isEmpty(),
+                     TEST_PASSWORD_ENV_VAR + " environment variable must be set for this test.");
+        assumeTrue(wrongEnvPassword != null && !wrongEnvPassword.isEmpty(),
+                     TEST_PASSWORD_ENV_WRONG_VAR + " environment variable must be set for this test.");
+        assumeTrue(!correctEnvPassword.equals(wrongEnvPassword),
+                     TEST_PASSWORD_ENV_VAR + " and " + TEST_PASSWORD_ENV_WRONG_VAR + " must have different values.");
+
+        Path envKeystorePath = tempDir.resolve("env_keystore_wrong_pass.p12");
+        String alias = "envAliasWrongPass";
+
+        // 1. Create and store using the CORRECT password via env var
+        PKCS12KeyStorageHandler correctHandler = new PKCS12KeyStorageHandler(envKeystorePath.toString(), PASSWORD_SOURCE_VALID);
+        correctHandler.storeKeyPair(alias, testKeyPair, testCertificate, KEY_ENTRY_PASSWORD);
+
+        // 2. Attempt to create handler and load using the WRONG password via env var
+        PKCS12KeyStorageHandler wrongHandler = new PKCS12KeyStorageHandler(envKeystorePath.toString(), PASSWORD_SOURCE_WRONG);
+
+        // 3. Attempting an operation that loads the keystore should fail
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            wrongHandler.getPublicKey(alias); // getPublicKey triggers loadKeyStore
+        }, "Loading keystore should fail with incorrect password from env var.");
+
+        assertTrue(exception.getMessage().contains("Incorrect password") || (exception.getCause() != null && exception.getCause().getMessage().contains("mac check failed")),
+                   "Exception message should indicate incorrect keystore password or MAC failure. Message: " + exception.getMessage());
+   }
+
+   @Test
+   void testConstructorWithEnvPasswordAndNullParentDir() throws DataHandlingException {
+       String envPassword = System.getenv(TEST_PASSWORD_ENV_VAR);
+       assumeTrue(envPassword != null && !envPassword.isEmpty(),
+                    TEST_PASSWORD_ENV_VAR + " environment variable must be set for this test.");
+
+       String keystoreFileNameOnly = "env_keystore_no_dir.p12";
+       Path keystoreInTempDir = tempDir.resolve(keystoreFileNameOnly); // Use tempDir for cleanup
+
+       // Ensure file doesn't exist
+       try {
+           Files.deleteIfExists(keystoreInTempDir);
+       } catch (IOException e) {
+           fail("Failed to delete test keystore before test: " + e.getMessage());
+       }
+
+       // Initialize handler with just filename and valid env var source
+       // This should succeed as the parent dir (tempDir) exists.
+       PKCS12KeyStorageHandler envHandler = assertDoesNotThrow(() ->
+           new PKCS12KeyStorageHandler(keystoreInTempDir.toString(), PASSWORD_SOURCE_VALID),
+           "Constructor should succeed when parent directory is implicitly the current/temp directory.");
+
+       assertNotNull(envHandler, "Handler should be created successfully.");
+
+       // Optional: Verify it works by storing something
+       assertDoesNotThrow(() -> envHandler.storeKeyPair("envTestNoDir", testKeyPair, testCertificate, KEY_ENTRY_PASSWORD),
+                          "Storing a key should succeed with handler initialized via env var and no explicit parent dir.");
+       assertTrue(Files.exists(keystoreInTempDir), "Keystore file should be created.");
+    }
+
+    // =========================================================================
+    // Tests for Specific Error Conditions in retrieve/get
+    // =========================================================================
+
+    @Test
+    void testRetrieveKeyPairForNonKeyEntryAlias() throws Exception {
+        String trustedCertAlias = "trustedCert";
+        // Manually create a keystore and add a trusted certificate entry
+        KeyStore ks = KeyStore.getInstance(KEYSTORE_TYPE);
+        ks.load(null, KEYSTORE_PASSWORD); // Initialize empty keystore
+        ks.setCertificateEntry(trustedCertAlias, testCertificate); // Add cert only
+
+        // Save this manually created keystore
+        try (FileOutputStream fos = new FileOutputStream(keystorePath.toFile())) {
+            ks.store(fos, KEYSTORE_PASSWORD);
+        }
+
+        // Now use the handler (which will load this keystore)
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            handler.retrieveKeyPair(trustedCertAlias, KEY_ENTRY_PASSWORD); // Try to retrieve as KeyPair
+        }, "Retrieving a non-key entry as KeyPair should fail.");
+
+        assertTrue(exception.getMessage().contains("is not a key entry"),
+                   "Exception message should indicate the alias is not a key entry. Message: " + exception.getMessage());
+   }
+
+   // Test specifically for ClassCastException possibility in retrieveKeyPair
+   // This requires an entry that exists and is a Key but not a PrivateKey,
+   // which is hard to create naturally with standard KeyStore APIs for PKCS12.
+   // KeyStore.SecretKeyEntry might trigger this if we could store it and retrieve
+   // via getKey, but PKCS12 typically focuses on private keys and certificates.
+   // This test might remain theoretical unless a specific scenario is found.
+   // @Test
+   // void testRetrieveKeyPairClassCastException() throws Exception {
+   //     String secretKeyAlias = "secretKeyAlias";
+   //     // Setup: Manually create a keystore with a SecretKeyEntry if possible
+   //     // KeyStore ks = KeyStore.getInstance(KEYSTORE_TYPE);
+   //     // ks.load(null, KEYSTORE_PASSWORD);
+   //     // SecretKey secretKey = ... // Generate or load a SecretKey
+   //     // KeyStore.SecretKeyEntry skEntry = new KeyStore.SecretKeyEntry(secretKey);
+   //     // ks.setEntry(secretKeyAlias, skEntry, new KeyStore.PasswordProtection(KEY_ENTRY_PASSWORD));
+   //     // try (FileOutputStream fos = new FileOutputStream(keystorePath.toFile())) {
+   //     //     ks.store(fos, KEYSTORE_PASSWORD);
+   //     // }
+   //
+   //     // DataHandlingException wrapperEx = assertThrows(DataHandlingException.class, () -> {
+   //     //     handler.retrieveKeyPair(secretKeyAlias, KEY_ENTRY_PASSWORD);
+   //     // }, "Retrieving a non-PrivateKey entry should cause an issue.");
+   //
+   //     // assertTrue(wrapperEx.getMessage().contains("was not of the expected type (PrivateKey)"),
+   //     //            "Exception message should indicate ClassCastException. Message: " + wrapperEx.getMessage());
+   //     // assertNotNull(wrapperEx.getCause());
+   //     // assertTrue(wrapperEx.getCause() instanceof ClassCastException, "Cause should be ClassCastException");
+   // }
+
+
+    @Test
+    void testGetPublicKeyForNonKeyPairAlias() throws Exception {
+        String trustedCertAlias = "trustedCertOnly";
+        // Manually create a keystore and add a trusted certificate entry
+        KeyStore ks = KeyStore.getInstance(KEYSTORE_TYPE);
+        ks.load(null, KEYSTORE_PASSWORD); // Initialize empty keystore
+        ks.setCertificateEntry(trustedCertAlias, testCertificate); // Add cert only
+
+        // Save this manually created keystore
+        try (FileOutputStream fos = new FileOutputStream(keystorePath.toFile())) {
+            ks.store(fos, KEYSTORE_PASSWORD);
+        }
+
+        // Use the handler to get the public key - this SHOULD work for a trusted cert entry
+        PublicKey pubKey = assertDoesNotThrow(() -> handler.getPublicKey(trustedCertAlias),
+                                              "Getting public key for a trusted certificate entry should succeed.");
+        assertNotNull(pubKey);
+        assertEquals(testCertificate.getPublicKey(), pubKey, "Public key from trusted cert entry should match.");
+    }
+
+    // Note: Testing the case where getCertificate returns null within getPublicKey is hard
+    // because KeyStore.getCertificate usually returns null only if the alias doesn't exist,
+    // which is already covered by testRetrieveNonExistentAlias. If an alias exists but
+    // somehow has no certificate (which shouldn't happen with standard KeyStore operations),
+    // mocking would be required.
+
+    @Test
+    void testLoadInvalidKeystoreFile() throws IOException {
+        // Create an invalid file at the keystore path
+        Files.writeString(keystorePath, "This is not a valid keystore file content.");
+
+        // Handler initialization itself doesn't load, the first operation does.
+        // Use the existing handler configured in setUp which points to keystorePath
+
+        // Attempt an operation that triggers loading the keystore
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            handler.getPublicKey("anyAlias"); // Or retrieveKeyPair
+        }, "Loading an invalid keystore file should throw DataHandlingException.");
+
+        // Check that the exception is a general load failure, not a password error
+        assertTrue(exception.getMessage().contains("Failed to load or initialize keystore"),
+                   "Exception message should indicate a general load failure. Message: " + exception.getMessage());
+        assertFalse(exception.getMessage().contains("Incorrect password"),
+                    "Exception message should not indicate an incorrect password for an invalid file. Message: " + exception.getMessage());
+            }
+
+    @Test
+    void testConstructorDirectoryCreationFailure() throws IOException {
+        Path parentDirAsFile = tempDir.resolve("parentDirFile");
+        Path keystoreInFakeDir = parentDirAsFile.resolve("keystore.p12");
+
+        // Create a file where the parent directory should be
+        Files.createFile(parentDirAsFile);
+        assertTrue(Files.exists(parentDirAsFile) && !Files.isDirectory(parentDirAsFile), "Parent directory path should exist as a file.");
+
+        // Attempt to initialize the handler - should fail during directory creation
+        DataHandlingException exception = assertThrows(DataHandlingException.class, () -> {
+            new PKCS12KeyStorageHandler(keystoreInFakeDir.toString(), KEYSTORE_PASSWORD);
+        }, "Constructor should fail if parent directory cannot be created.");
+
+        assertTrue(exception.getMessage().contains("Invalid keystore path or permissions issue"),
+                   "Exception message should indicate path or permission issue. Message: " + exception.getMessage());
+        // Check that the cause is likely an IOException (e.g., FileAlreadyExistsException or similar)
+        assertNotNull(exception.getCause(), "Exception should have a cause.");
+        assertTrue(exception.getCause() instanceof IOException, "Cause should be an IOException.");
+
+        // Clean up the created file
+        Files.deleteIfExists(parentDirAsFile);
+    }
 }

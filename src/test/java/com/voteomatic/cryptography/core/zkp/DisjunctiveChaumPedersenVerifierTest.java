@@ -4,7 +4,7 @@ import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
-import com.voteomatic.cryptography.securityutils.SecureRandomGenerator; // Added
+import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
