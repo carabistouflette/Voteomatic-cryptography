@@ -13,8 +13,8 @@ This list summarizes potential improvements, issues, and tasks identified during
 
 ## Improvements & Refactoring
 
--   [ ] **[Improvement][High]** Address the inefficient tallying mechanism in `VoteServiceImpl`. The current brute-force discrete logarithm solution will not scale. Investigate alternatives like precomputation (for small vote counts) or more advanced discrete log algorithms if larger tallies are expected.
--   [ ] **[Improvement][Medium]** Add static analysis plugins (e.g., Checkstyle, PMD, SpotBugs) to `pom.xml` to enforce coding standards and automatically detect potential bugs/smells.
+-   [x] **[Improvement][High]** Address the inefficient tallying mechanism in `VoteServiceImpl`. The current brute-force discrete logarithm solution will not scale. Investigate alternatives like precomputation (for small vote counts) or more advanced discrete log algorithms if larger tallies are expected.
+-   [x] **[Improvement][Medium]** Add static analysis plugins (e.g., Checkstyle, PMD, SpotBugs) to `pom.xml` to enforce coding standards and automatically detect potential bugs/smells.
 -   [ ] **[Refactoring][Low]** Review `KeyServiceImpl.java` (identified as >250 LOC) for potential complexity or violations of the Single Responsibility Principle. Consider breaking down functionality if appropriate.
 -   [ ] **[Improvement][Low]** Update the `commons-math3` dependency in `pom.xml` to a more recent version if compatible.
 -   [ ] **[Improvement][Low]** Investigate the commented-out NVD check configuration in `dependency-check-maven` plugin in `pom.xml`. Re-enable or remove if appropriate.

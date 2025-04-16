@@ -5,10 +5,29 @@ import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
-import com.voteomatic.cryptography.io.PKCS12KeyStorageHandler;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
-import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl;
-
+// import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl; // Removed unused
+// import
+import java.math.BigInteger;
+import java.security.*;
+// import java.security.cert.Certificate; // Removed unused import
+import java.security.KeyPairGenerator; // Added for RSA key generation
+// Note: java.security.KeyPair is already imported via java.security.*
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
+// import java.security.spec.KeySpec; // Removed unused import
+import java.util.Date;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import javax.crypto.interfaces.DHPrivateKey;
+import javax.crypto.interfaces.DHPublicKey;
+import javax.crypto.spec.DHParameterSpec;
+import javax.crypto.spec.DHPrivateKeySpec;
+import javax.crypto.spec.DHPublicKeySpec;
+// import java.io.IOException; // Removed unused import
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -18,293 +37,292 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.OperatorCreationException;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 
-import javax.crypto.interfaces.DHPrivateKey;
-import javax.crypto.interfaces.DHPublicKey;
-import javax.crypto.spec.DHParameterSpec;
-import javax.crypto.spec.DHPrivateKeySpec;
-import javax.crypto.spec.DHPublicKeySpec;
-import java.io.IOException; // Keep for potential exceptions from helpers
-import java.math.BigInteger;
-import java.security.*;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.X509Certificate;
-import java.security.KeyPairGenerator; // Added for RSA key generation
-// Note: java.security.KeyPair is already imported via java.security.*
-import java.security.spec.InvalidKeySpecException;
-import java.security.spec.KeySpec;
-import java.util.Date;
-import java.util.Objects;
-import java.util.concurrent.TimeUnit;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
 /**
- * Implementation of the KeyService interface.
- * Handles ElGamal key pair generation, storage, and retrieval using a KeyStorageHandler.
- * The ElGamal domain parameters (p, g, q) are provided during construction via a DomainParameters object.
+ * Implementation of the KeyService interface. Handles ElGamal key pair generation, storage, and
+ * retrieval using a KeyStorageHandler. The ElGamal domain parameters (p, g, q) are provided during
+ * construction via a DomainParameters object.
  */
 public class KeyServiceImpl implements KeyService {
 
-    private static final Logger LOGGER = Logger.getLogger(KeyServiceImpl.class.getName());
+  private static final Logger LOGGER = Logger.getLogger(KeyServiceImpl.class.getName());
 
-    private final KeyStorageHandler keyStorageHandler;
-    private final SecureRandomGenerator secureRandomGenerator;
-    private final DomainParameters params; // Encapsulates p, g, q
+  private final KeyStorageHandler keyStorageHandler;
+  private final SecureRandomGenerator secureRandomGenerator;
+  private final DomainParameters params; // Encapsulates p, g, q
 
-    // Suffixes no longer needed as KeyStore handles alias directly
+  // Suffixes no longer needed as KeyStore handles alias directly
 
-    /**
-     * Constructs a KeyServiceImpl with the required dependencies and domain parameters.
-     *
-     * @param params                The domain parameters (p, g, q) for ElGamal operations. Must be non-null.
-     * @param keyStorageHandler     The handler for storing and retrieving key data. Must be non-null.
-     * @param secureRandomGenerator The generator for secure random numbers. Must be non-null.
-     */
-    public KeyServiceImpl(DomainParameters params, KeyStorageHandler keyStorageHandler, SecureRandomGenerator secureRandomGenerator) {
-        this.params = Objects.requireNonNull(params, "DomainParameters cannot be null.");
-        this.keyStorageHandler = Objects.requireNonNull(keyStorageHandler, "KeyStorageHandler cannot be null.");
-        this.secureRandomGenerator = Objects.requireNonNull(secureRandomGenerator, "SecureRandomGenerator cannot be null.");
-        // Consider adding validation for p (primality) and g (generator properties) here or elsewhere.
-        // Ensure BouncyCastle provider is registered
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.addProvider(new BouncyCastleProvider());
-        }
+  /**
+   * Constructs a KeyServiceImpl with the required dependencies and domain parameters.
+   *
+   * @param params The domain parameters (p, g, q) for ElGamal operations. Must be non-null.
+   * @param keyStorageHandler The handler for storing and retrieving key data. Must be non-null.
+   * @param secureRandomGenerator The generator for secure random numbers. Must be non-null.
+   */
+  public KeyServiceImpl(
+      DomainParameters params,
+      KeyStorageHandler keyStorageHandler,
+      SecureRandomGenerator secureRandomGenerator) {
+    this.params = Objects.requireNonNull(params, "DomainParameters cannot be null.");
+    this.keyStorageHandler =
+        Objects.requireNonNull(keyStorageHandler, "KeyStorageHandler cannot be null.");
+    this.secureRandomGenerator =
+        Objects.requireNonNull(secureRandomGenerator, "SecureRandomGenerator cannot be null.");
+    // Consider adding validation for p (primality) and g (generator properties) here or elsewhere.
+    // Ensure BouncyCastle provider is registered
+    if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
+      Security.addProvider(new BouncyCastleProvider());
+    }
+  }
+
+  // Removed convenience constructor that only took p and g.
+  // The full DomainParameters (including q) must be provided by the application.
+
+  // Removed unused private method createDefaultKeyStorageHandler()
+
+  @Override
+  public KeyPair generateKeyPair() throws KeyManagementException {
+    try {
+      // The private key x must be generated securely in the range [1, q-1],
+      // where q is the prime order of the subgroup generated by g.
+      BigInteger q = this.params.getQ();
+      BigInteger qMinusOne = q.subtract(BigInteger.ONE);
+
+      if (qMinusOne.compareTo(BigInteger.ZERO) <= 0) {
+        throw new KeyManagementException("Subgroup order q must be greater than 1.");
+      }
+
+      // secureRandomGenerator.generateBigInteger(limit) generates in [0, limit-1].
+      // So generateBigInteger(qMinusOne) gives [0, q-2]. Add 1 to get [1, q-1].
+      BigInteger x =
+          secureRandomGenerator
+              .generateBigInteger(qMinusOne)
+              .add(BigInteger.ONE); // x is now in [1, q-1]
+
+      BigInteger p = this.params.getP();
+      BigInteger g = this.params.getG();
+      BigInteger y = g.modPow(x, p);
+
+      // Create key objects using the service's DomainParameters
+      PublicKey publicKey = new PublicKey(this.params, y);
+      PrivateKey privateKey = new PrivateKey(this.params, x);
+
+      return new KeyPair(publicKey, privateKey);
+
+    } catch (Exception e) {
+      throw new KeyManagementException("Failed to generate ElGamal key pair", e);
+    }
+  }
+
+  /**
+   * Stores the key pair using the configured KeyStorageHandler. Requires a password to protect the
+   * key entry within the keystore.
+   *
+   * @param keyPair The ElGamal key pair to store.
+   * @param keyId The alias (identifier) for the key pair in the storage.
+   * @param password The password to protect the key entry.
+   * @throws KeyManagementException If storing fails due to validation, conversion, or storage
+   *     issues.
+   */
+  @Override
+  public void storeKeyPair(KeyPair keyPair, String keyId, char[] password)
+      throws KeyManagementException {
+    if (keyId == null || keyId.trim().isEmpty()) {
+      throw new KeyManagementException("Key ID (alias) cannot be null or empty.");
+    }
+    if (keyPair == null || keyPair.getPublicKey() == null || keyPair.getPrivateKey() == null) {
+      throw new KeyManagementException("KeyPair and its components cannot be null.");
+    }
+    if (password == null || password.length == 0) {
+      throw new KeyManagementException("Password for key entry cannot be null or empty.");
+    }
+    // Verify the keypair parameters match the service instance parameters
+    if (!this.params.equals(keyPair.getPublicKey().getParams())) {
+      throw new KeyManagementException(
+          "KeyPair DomainParameters do not match the parameters configured for this KeyService"
+              + " instance.");
     }
 
-    // Removed convenience constructor that only took p and g.
-    // The full DomainParameters (including q) must be provided by the application.
+    try {
+      // 1. Convert custom KeyPair to JCE KeyPair
+      java.security.KeyPair jceKeyPair = convertToJceKeyPair(keyPair);
 
-    private static KeyStorageHandler createDefaultKeyStorageHandler() throws KeyManagementException {
-        try {
-            String defaultKeystorePath = "voteomatic_keystore.p12";
-            // Load keystore password from environment variable
-            String keystorePassword = System.getenv("KEYSTORE_PASSWORD");
-            if (keystorePassword == null || keystorePassword.trim().isEmpty()) {
-                throw new KeyManagementException("KEYSTORE_PASSWORD environment variable not set or empty.");
-            }
-            char[] defaultPassword = keystorePassword.toCharArray();
-            return new PKCS12KeyStorageHandler(defaultKeystorePath, defaultPassword);
-        } catch (DataHandlingException e) {
-            throw new KeyManagementException("Failed to initialize default PKCS12KeyStorageHandler", e);
+      // 2. Generate a self-signed certificate for the JCE KeyPair
+      // Using a simple subject DN. Customize if needed.
+      String subjectDN = "CN=Voteomatic Key Alias: " + keyId;
+      X509Certificate certificate;
+      try {
+        certificate = generateSelfSignedCertificate(jceKeyPair, subjectDN);
+      } catch (OperatorCreationException e) {
+        // This exception originates from the ContentSigner creation
+        LOGGER.log(
+            Level.SEVERE,
+            "Failed to create content signer during certificate generation for key ID: " + keyId,
+            e);
+        throw new KeyManagementException(
+            "Failed to create cryptographic operator for certificate generation", e);
+      }
+
+      // 3. Store using the KeyStorageHandler
+      keyStorageHandler.storeKeyPair(keyId, jceKeyPair, certificate, password);
+
+      // Catch specific checked exceptions from the try block
+      // NOTE: OperatorCreationException is removed here temporarily pending dependency resolution.
+      // Catching broader Exception for now to allow compilation structure check.
+    } catch (Exception e) {
+      // Check if it's one of the expected types before wrapping, or just wrap generally.
+      // For now, wrap generally. Add specific handling if needed after dependencies are fixed.
+      if (e instanceof DataHandlingException
+          || e instanceof NoSuchAlgorithmException
+          || e instanceof InvalidKeySpecException
+          || e instanceof NoSuchProviderException
+          || e instanceof CertificateException
+          || e instanceof InvalidKeyException
+          || e instanceof SignatureException /*|| e instanceof OperatorCreationException */) {
+        throw new KeyManagementException("Failed to store key pair with ID: " + keyId, e);
+      } else {
+        // Re-throw unexpected runtime exceptions
+        if (e instanceof RuntimeException) {
+          throw (RuntimeException) e;
         }
+        // Wrap other unexpected checked exceptions
+        throw new KeyManagementException("Unexpected error storing key pair with ID: " + keyId, e);
+      }
+    }
+  }
+
+  /**
+   * Retrieves the key pair using the configured KeyStorageHandler. Requires the password used when
+   * the key entry was stored.
+   *
+   * @param keyId The alias (identifier) of the key pair to retrieve.
+   * @param password The password required to access the key entry.
+   * @return The retrieved ElGamal key pair.
+   * @throws KeyManagementException If retrieval fails due to validation, conversion, or storage
+   *     issues.
+   */
+  @Override
+  public KeyPair retrieveKeyPair(String keyId, char[] password) throws KeyManagementException {
+    if (keyId == null || keyId.trim().isEmpty()) {
+      throw new KeyManagementException("Key ID (alias) cannot be null or empty.");
+    }
+    if (password == null || password.length == 0) {
+      throw new KeyManagementException("Password for key entry cannot be null or empty.");
     }
 
-    @Override
-    public KeyPair generateKeyPair() throws KeyManagementException {
-        try {
-            // The private key x must be generated securely in the range [1, q-1],
-            // where q is the prime order of the subgroup generated by g.
-            BigInteger q = this.params.getQ();
-            BigInteger qMinusOne = q.subtract(BigInteger.ONE);
+    try {
+      // 1. Retrieve JCE KeyPair from storage
+      java.security.KeyPair jceKeyPair = keyStorageHandler.retrieveKeyPair(keyId, password);
 
-            if (qMinusOne.compareTo(BigInteger.ZERO) <= 0) {
-                 throw new KeyManagementException("Subgroup order q must be greater than 1.");
-            }
+      // 2. Convert JCE KeyPair back to custom KeyPair
+      KeyPair voteomaticKeyPair = convertFromJceKeyPair(jceKeyPair, this.params);
 
-            // secureRandomGenerator.generateBigInteger(limit) generates in [0, limit-1].
-            // So generateBigInteger(qMinusOne) gives [0, q-2]. Add 1 to get [1, q-1].
-            BigInteger x = secureRandomGenerator.generateBigInteger(qMinusOne).add(BigInteger.ONE); // x is now in [1, q-1]
+      return voteomaticKeyPair;
 
+    } catch (DataHandlingException
+        | NoSuchAlgorithmException
+        | InvalidKeySpecException
+        | NoSuchProviderException
+        | ClassCastException e) {
+      // ClassCastException could happen if retrieved keys aren't DH keys
+      throw new KeyManagementException("Failed to retrieve key pair with ID: " + keyId, e);
+    }
+  }
 
-            BigInteger p = this.params.getP();
-            BigInteger g = this.params.getG();
-            BigInteger y = g.modPow(x, p);
+  /**
+   * Retrieves only the public key associated with the given alias. This typically does not require
+   * a password.
+   *
+   * @param keyId The alias (identifier) of the key entry.
+   * @return The retrieved ElGamal public key.
+   * @throws KeyManagementException If retrieval fails due to validation, conversion, or storage
+   *     issues.
+   */
+  public PublicKey getPublicKey(String keyId) throws KeyManagementException {
+    if (keyId == null || keyId.trim().isEmpty()) {
+      throw new KeyManagementException("Key ID (alias) cannot be null or empty.");
+    }
+    try {
+      // 1. Retrieve JCE PublicKey from storage
+      java.security.PublicKey jcePublicKey = keyStorageHandler.getPublicKey(keyId);
 
-            // Create key objects using the service's DomainParameters
-            PublicKey publicKey = new PublicKey(this.params, y);
-            PrivateKey privateKey = new PrivateKey(this.params, x);
+      // 2. Convert JCE PublicKey back to custom PublicKey
+      PublicKey voteomaticPublicKey = convertFromJcePublicKey(jcePublicKey, this.params);
 
-            return new KeyPair(publicKey, privateKey);
+      return voteomaticPublicKey;
 
-        } catch (Exception e) {
-            throw new KeyManagementException("Failed to generate ElGamal key pair", e);
-        }
+    } catch (DataHandlingException
+        | NoSuchAlgorithmException
+        | InvalidKeySpecException
+        | NoSuchProviderException
+        | ClassCastException e) {
+      // ClassCastException could happen if retrieved key isn't a DH key
+      throw new KeyManagementException("Failed to retrieve public key with ID: " + keyId, e);
+    }
+  }
+
+  @Override
+  public boolean verifyKeyIntegrity(PublicKey publicKey) throws KeyManagementException {
+    if (publicKey == null) {
+      throw new KeyManagementException("PublicKey cannot be null for verification.");
     }
 
-    /**
-     * Stores the key pair using the configured KeyStorageHandler.
-     * Requires a password to protect the key entry within the keystore.
-     *
-     * @param keyPair  The ElGamal key pair to store.
-     * @param keyId    The alias (identifier) for the key pair in the storage.
-     * @param password The password to protect the key entry.
-     * @throws KeyManagementException If storing fails due to validation, conversion, or storage issues.
-     */
-    @Override
-    public void storeKeyPair(KeyPair keyPair, String keyId, char[] password) throws KeyManagementException {
-        if (keyId == null || keyId.trim().isEmpty()) {
-            throw new KeyManagementException("Key ID (alias) cannot be null or empty.");
-        }
-        if (keyPair == null || keyPair.getPublicKey() == null || keyPair.getPrivateKey() == null) {
-            throw new KeyManagementException("KeyPair and its components cannot be null.");
-        }
-        if (password == null || password.length == 0) {
-            throw new KeyManagementException("Password for key entry cannot be null or empty.");
-        }
-        // Verify the keypair parameters match the service instance parameters
-        if (!this.params.equals(keyPair.getPublicKey().getParams())) {
-             throw new KeyManagementException("KeyPair DomainParameters do not match the parameters configured for this KeyService instance.");
-        }
-
-        try {
-            // 1. Convert custom KeyPair to JCE KeyPair
-            java.security.KeyPair jceKeyPair = convertToJceKeyPair(keyPair);
-
-            // 2. Generate a self-signed certificate for the JCE KeyPair
-            // Using a simple subject DN. Customize if needed.
-            String subjectDN = "CN=Voteomatic Key Alias: " + keyId;
-            X509Certificate certificate;
-            try {
-                certificate = generateSelfSignedCertificate(jceKeyPair, subjectDN);
-            } catch (OperatorCreationException e) {
-                // This exception originates from the ContentSigner creation
-                LOGGER.log(Level.SEVERE, "Failed to create content signer during certificate generation for key ID: " + keyId, e);
-                throw new KeyManagementException("Failed to create cryptographic operator for certificate generation", e);
-            }
-
-            // 3. Store using the KeyStorageHandler
-            keyStorageHandler.storeKeyPair(keyId, jceKeyPair, certificate, password);
-
-        // Catch specific checked exceptions from the try block
-        // NOTE: OperatorCreationException is removed here temporarily pending dependency resolution.
-        // Catching broader Exception for now to allow compilation structure check.
-        } catch (Exception e) {
-             // Check if it's one of the expected types before wrapping, or just wrap generally.
-             // For now, wrap generally. Add specific handling if needed after dependencies are fixed.
-             if (e instanceof DataHandlingException || e instanceof NoSuchAlgorithmException ||
-                 e instanceof InvalidKeySpecException || e instanceof NoSuchProviderException ||
-                 e instanceof CertificateException || e instanceof InvalidKeyException ||
-                 e instanceof SignatureException /*|| e instanceof OperatorCreationException */) {
-                 throw new KeyManagementException("Failed to store key pair with ID: " + keyId, e);
-             } else {
-                 // Re-throw unexpected runtime exceptions
-                 if (e instanceof RuntimeException) {
-                     throw (RuntimeException) e;
-                 }
-                 // Wrap other unexpected checked exceptions
-                 throw new KeyManagementException("Unexpected error storing key pair with ID: " + keyId, e);
-             }
-        }
+    if (publicKey.getParams() == null || publicKey.getY() == null) {
+      return false; // Null components
     }
 
-    /**
-     * Retrieves the key pair using the configured KeyStorageHandler.
-     * Requires the password used when the key entry was stored.
-     *
-     * @param keyId    The alias (identifier) of the key pair to retrieve.
-     * @param password The password required to access the key entry.
-     * @return The retrieved ElGamal key pair.
-     * @throws KeyManagementException If retrieval fails due to validation, conversion, or storage issues.
-     */
-    @Override
-    public KeyPair retrieveKeyPair(String keyId, char[] password) throws KeyManagementException {
-        if (keyId == null || keyId.trim().isEmpty()) {
-            throw new KeyManagementException("Key ID (alias) cannot be null or empty.");
-        }
-         if (password == null || password.length == 0) {
-            throw new KeyManagementException("Password for key entry cannot be null or empty.");
-        }
-
-        try {
-            // 1. Retrieve JCE KeyPair from storage
-            java.security.KeyPair jceKeyPair = keyStorageHandler.retrieveKeyPair(keyId, password);
-
-            // 2. Convert JCE KeyPair back to custom KeyPair
-            KeyPair voteomaticKeyPair = convertFromJceKeyPair(jceKeyPair, this.params);
-
-            return voteomaticKeyPair;
-
-        } catch (DataHandlingException | NoSuchAlgorithmException | InvalidKeySpecException |
-                 NoSuchProviderException | ClassCastException e) {
-            // ClassCastException could happen if retrieved keys aren't DH keys
-            throw new KeyManagementException("Failed to retrieve key pair with ID: " + keyId, e);
-        }
+    // Check if the key's parameters match the service's parameters
+    if (!this.params.equals(publicKey.getParams())) {
+      LOGGER.warning("Public key verification failed: DomainParameters mismatch.");
+      return false;
     }
 
-    /**
-     * Retrieves only the public key associated with the given alias.
-     * This typically does not require a password.
-     *
-     * @param keyId The alias (identifier) of the key entry.
-     * @return The retrieved ElGamal public key.
-     * @throws KeyManagementException If retrieval fails due to validation, conversion, or storage issues.
-     */
-    public PublicKey getPublicKey(String keyId) throws KeyManagementException {
-         if (keyId == null || keyId.trim().isEmpty()) {
-            throw new KeyManagementException("Key ID (alias) cannot be null or empty.");
-        }
-        try {
-            // 1. Retrieve JCE PublicKey from storage
-            java.security.PublicKey jcePublicKey = keyStorageHandler.getPublicKey(keyId);
+    // y = g^x mod p. Since 1 <= x <= p-2 (or q-1), y should not be 0 or 1 typically,
+    // unless g has small order or x=p-1 (which we avoid).
+    // A simple check is that y is within the valid range.
+    BigInteger p = this.params.getP();
+    BigInteger q = this.params.getQ();
+    BigInteger y = publicKey.getY();
 
-            // 2. Convert JCE PublicKey back to custom PublicKey
-            PublicKey voteomaticPublicKey = convertFromJcePublicKey(jcePublicKey, this.params);
-
-            return voteomaticPublicKey;
-
-        } catch (DataHandlingException | NoSuchAlgorithmException | InvalidKeySpecException |
-                 NoSuchProviderException | ClassCastException e) {
-            // ClassCastException could happen if retrieved key isn't a DH key
-            throw new KeyManagementException("Failed to retrieve public key with ID: " + keyId, e);
-        }
+    // Basic range check: y should be in [1, p-1]
+    if (y.compareTo(BigInteger.ONE) < 0 || y.compareTo(p) >= 0) {
+      LOGGER.warning("Public key verification failed: y value out of range [1, p-1]. y=" + y);
+      return false;
     }
 
-    @Override
-    public boolean verifyKeyIntegrity(PublicKey publicKey) throws KeyManagementException {
-         if (publicKey == null) {
-            throw new KeyManagementException("PublicKey cannot be null for verification.");
-        }
-
-        if (publicKey.getParams() == null || publicKey.getY() == null) {
-            return false; // Null components
-        }
-
-        // Check if the key's parameters match the service's parameters
-        if (!this.params.equals(publicKey.getParams())) {
-            LOGGER.warning("Public key verification failed: DomainParameters mismatch.");
-            return false;
-        }
-
-        // y = g^x mod p. Since 1 <= x <= p-2 (or q-1), y should not be 0 or 1 typically,
-        // unless g has small order or x=p-1 (which we avoid).
-        // A simple check is that y is within the valid range.
-        BigInteger p = this.params.getP();
-        BigInteger q = this.params.getQ();
-        BigInteger y = publicKey.getY();
-
-        // Basic range check: y should be in [1, p-1]
-        if (y.compareTo(BigInteger.ONE) < 0 || y.compareTo(p) >= 0) {
-             LOGGER.warning("Public key verification failed: y value out of range [1, p-1]. y=" + y);
-             return false;
-        }
-
-        // Check if y is in the subgroup of order q: y^q mod p == 1
-        // This is a crucial check for many protocols using DH groups.
-        if (!y.modPow(q, p).equals(BigInteger.ONE)) {
-            LOGGER.warning("Public key verification failed: y value not in subgroup of order q. y=" + y + ", q=" + q + ", p=" + p);
-            return false; // y is not in the correct subgroup
-        }
-
-        // If all checks pass, consider the public key structurally valid in the context of this service.
-        return true;
+    // Check if y is in the subgroup of order q: y^q mod p == 1
+    // This is a crucial check for many protocols using DH groups.
+    if (!y.modPow(q, p).equals(BigInteger.ONE)) {
+      LOGGER.warning(
+          "Public key verification failed: y value not in subgroup of order q. y="
+              + y
+              + ", q="
+              + q
+              + ", p="
+              + p);
+      return false; // y is not in the correct subgroup
     }
 
-// --- Helper Methods for Key Conversion and Certificate Generation ---
+    // If all checks pass, consider the public key structurally valid in the context of this
+    // service.
+    return true;
+  }
 
-private KeyFactory getKeyFactory() throws NoSuchAlgorithmException, NoSuchProviderException {
+  // --- Helper Methods for Key Conversion and Certificate Generation ---
+
+  private KeyFactory getKeyFactory() throws NoSuchAlgorithmException, NoSuchProviderException {
     // Try "ElGamal" with BouncyCastle first, fallback to standard "DiffieHellman"
     try {
-        return KeyFactory.getInstance("ElGamal", BouncyCastleProvider.PROVIDER_NAME);
+      return KeyFactory.getInstance("ElGamal", BouncyCastleProvider.PROVIDER_NAME);
     } catch (NoSuchAlgorithmException e) {
-        // Fallback to DiffieHellman if ElGamal is not directly supported by BC KeyFactory
-        // (Specs DHPublicKeySpec/DHPrivateKeySpec are DH-based)
-        return KeyFactory.getInstance("DiffieHellman");
+      // Fallback to DiffieHellman if ElGamal is not directly supported by BC KeyFactory
+      // (Specs DHPublicKeySpec/DHPrivateKeySpec are DH-based)
+      return KeyFactory.getInstance("DiffieHellman");
     }
-}
+  }
 
-private java.security.KeyPair convertToJceKeyPair(KeyPair voteomaticKeyPair)
-        throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
+  private java.security.KeyPair convertToJceKeyPair(KeyPair voteomaticKeyPair)
+      throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException {
 
     PublicKey pub = voteomaticKeyPair.getPublicKey();
     PrivateKey priv = voteomaticKeyPair.getPrivateKey();
@@ -327,13 +345,18 @@ private java.security.KeyPair convertToJceKeyPair(KeyPair voteomaticKeyPair)
     java.security.PrivateKey jcePrivateKey = keyFactory.generatePrivate(privSpec);
 
     return new java.security.KeyPair(jcePublicKey, jcePrivateKey);
-}
+  }
 
-private KeyPair convertFromJceKeyPair(java.security.KeyPair jceKeyPair, DomainParameters expectedParams)
-        throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException, KeyManagementException {
+  private KeyPair convertFromJceKeyPair(
+      java.security.KeyPair jceKeyPair, DomainParameters expectedParams)
+      throws NoSuchAlgorithmException,
+          InvalidKeySpecException,
+          NoSuchProviderException,
+          KeyManagementException {
 
-    if (!(jceKeyPair.getPublic() instanceof DHPublicKey) || !(jceKeyPair.getPrivate() instanceof DHPrivateKey)) {
-        throw new ClassCastException("Retrieved JCE keys are not of expected DH type.");
+    if (!(jceKeyPair.getPublic() instanceof DHPublicKey)
+        || !(jceKeyPair.getPrivate() instanceof DHPrivateKey)) {
+      throw new ClassCastException("Retrieved JCE keys are not of expected DH type.");
     }
 
     DHPublicKey jcePublicKey = (DHPublicKey) jceKeyPair.getPublic();
@@ -348,7 +371,8 @@ private KeyPair convertFromJceKeyPair(java.security.KeyPair jceKeyPair, DomainPa
 
     // Validate against expected service parameters
     if (!expectedParams.getP().equals(p) || !expectedParams.getG().equals(g)) {
-        throw new KeyManagementException("Retrieved key parameters (p, g) do not match expected service configuration.");
+      throw new KeyManagementException(
+          "Retrieved key parameters (p, g) do not match expected service configuration.");
     }
 
     // Create custom key objects using the expected DomainParameters
@@ -356,13 +380,17 @@ private KeyPair convertFromJceKeyPair(java.security.KeyPair jceKeyPair, DomainPa
     PrivateKey voteomaticPrivateKey = new PrivateKey(expectedParams, x);
 
     return new KeyPair(voteomaticPublicKey, voteomaticPrivateKey);
-}
+  }
 
- private PublicKey convertFromJcePublicKey(java.security.PublicKey jcePublicKey, DomainParameters expectedParams)
-        throws NoSuchAlgorithmException, InvalidKeySpecException, NoSuchProviderException, KeyManagementException {
+  private PublicKey convertFromJcePublicKey(
+      java.security.PublicKey jcePublicKey, DomainParameters expectedParams)
+      throws NoSuchAlgorithmException,
+          InvalidKeySpecException,
+          NoSuchProviderException,
+          KeyManagementException {
 
     if (!(jcePublicKey instanceof DHPublicKey)) {
-        throw new ClassCastException("Retrieved JCE public key is not of expected DH type.");
+      throw new ClassCastException("Retrieved JCE public key is not of expected DH type.");
     }
 
     DHPublicKey dhPublicKey = (DHPublicKey) jcePublicKey;
@@ -375,32 +403,37 @@ private KeyPair convertFromJceKeyPair(java.security.KeyPair jceKeyPair, DomainPa
 
     // Validate against expected service parameters
     if (!expectedParams.getP().equals(p) || !expectedParams.getG().equals(g)) {
-        throw new KeyManagementException("Retrieved public key parameters (p, g) do not match expected service configuration.");
+      throw new KeyManagementException(
+          "Retrieved public key parameters (p, g) do not match expected service configuration.");
     }
 
     // Create custom public key object using the expected DomainParameters
     return new PublicKey(expectedParams, y);
-}
+  }
 
-
-/**
- * Generates a basic self-signed X.509 certificate for the given key pair.
- * Uses BouncyCastle API.
- *
- * @param keyPair   The JCE KeyPair (containing DH/ElGamal keys).
- * @param subjectDN The subject distinguished name (e.g., "CN=MyKey").
- * @return A self-signed X509Certificate.
- * @throws OperatorCreationException If the signer cannot be created.
- * @throws CertificateException      If certificate generation fails.
- * @throws NoSuchAlgorithmException  If the signing algorithm is not found.
- * @throws InvalidKeyException       If the private key is invalid for signing.
- * @throws NoSuchProviderException   If BouncyCastle provider is not found.
- * @throws SignatureException        If signing fails.
- */
-// NOTE: OperatorCreationException removed from throws clause temporarily pending dependency resolution.
-private X509Certificate generateSelfSignedCertificate(java.security.KeyPair keyPair, String subjectDN)
-        throws CertificateException, NoSuchAlgorithmException,
-               InvalidKeyException, NoSuchProviderException, SignatureException, OperatorCreationException {
+  /**
+   * Generates a basic self-signed X.509 certificate for the given key pair. Uses BouncyCastle API.
+   *
+   * @param keyPair The JCE KeyPair (containing DH/ElGamal keys).
+   * @param subjectDN The subject distinguished name (e.g., "CN=MyKey").
+   * @return A self-signed X509Certificate.
+   * @throws OperatorCreationException If the signer cannot be created.
+   * @throws CertificateException If certificate generation fails.
+   * @throws NoSuchAlgorithmException If the signing algorithm is not found.
+   * @throws InvalidKeyException If the private key is invalid for signing.
+   * @throws NoSuchProviderException If BouncyCastle provider is not found.
+   * @throws SignatureException If signing fails.
+   */
+  // NOTE: OperatorCreationException removed from throws clause temporarily pending dependency
+  // resolution.
+  private X509Certificate generateSelfSignedCertificate(
+      java.security.KeyPair keyPair, String subjectDN)
+      throws CertificateException,
+          NoSuchAlgorithmException,
+          InvalidKeyException,
+          NoSuchProviderException,
+          SignatureException,
+          OperatorCreationException {
 
     long now = System.currentTimeMillis();
     Date startDate = new Date(now);
@@ -409,7 +442,7 @@ private X509Certificate generateSelfSignedCertificate(java.security.KeyPair keyP
 
     // Use the key pair's public key for the certificate
     java.security.PublicKey pubKey = keyPair.getPublic();
-    java.security.PrivateKey privKey = keyPair.getPrivate();
+    // java.security.PrivateKey privKey = keyPair.getPrivate(); // Removed unused variable
 
     // Subject and Issuer are the same for self-signed certs
     X500Name subject = new X500Name(subjectDN);
@@ -419,13 +452,8 @@ private X509Certificate generateSelfSignedCertificate(java.security.KeyPair keyP
     BigInteger serialNumber = new BigInteger(64, new SecureRandom());
 
     // Use BouncyCastle's builder
-    X509v3CertificateBuilder certBuilder = new JcaX509v3CertificateBuilder(
-            issuer,
-            serialNumber,
-            startDate,
-            endDate,
-            subject,
-            pubKey);
+    X509v3CertificateBuilder certBuilder =
+        new JcaX509v3CertificateBuilder(issuer, serialNumber, startDate, endDate, subject, pubKey);
 
     // Generate a temporary RSA key pair specifically for signing the certificate
     // The certificate itself will still contain the original ElGamal public key (pubKey)
@@ -436,18 +464,21 @@ private X509Certificate generateSelfSignedCertificate(java.security.KeyPair keyP
 
     // Use SHA256withRSA for the signature algorithm, as we are signing with the temporary RSA key
     String signatureAlgorithm = "SHA256withRSA";
-    ContentSigner contentSigner = new JcaContentSignerBuilder(signatureAlgorithm)
+    ContentSigner contentSigner =
+        new JcaContentSignerBuilder(signatureAlgorithm)
             .setProvider(BouncyCastleProvider.PROVIDER_NAME)
             .build(signingPrivateKey); // Sign using the temporary RSA private key
 
     // Build and sign the certificate
-    X509Certificate certificate = new JcaX509CertificateConverter()
+    X509Certificate certificate =
+        new JcaX509CertificateConverter()
             .setProvider(BouncyCastleProvider.PROVIDER_NAME)
             .getCertificate(certBuilder.build(contentSigner));
 
     // Optional: Verify the certificate signature (self-verification)
-    // certificate.verify(pubKey); // Removed: Verification fails as cert pub key (ElGamal) doesn't match signing key type (RSA)
+    // certificate.verify(pubKey); // Removed: Verification fails as cert pub key (ElGamal) doesn't
+    // match signing key type (RSA)
 
     return certificate;
-}
+  }
 }
