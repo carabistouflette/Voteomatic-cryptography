@@ -59,7 +59,7 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
     BigInteger r0 = prf.getR0();
     BigInteger a1 = prf.getA1();
     BigInteger b1 = prf.getB1();
-    BigInteger c1_challenge = prf.getC1(); // Renamed from c1 to avoid clash
+    BigInteger c1_challenge = prf.getC1();
     BigInteger r1 = prf.getR1();
 
     try {

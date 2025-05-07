@@ -96,14 +96,14 @@ public class SchnorrProver implements ZkpProver<SchnorrStatement, SchnorrWitness
       // 3. Compute challenge c = H(p || q || g || y || t) mod q using utility class
       DomainParameters domainParams = new DomainParameters(p, q, g);
       PublicKey pubKey = new PublicKey(domainParams, y);
-      BigInteger cHash = // Renamed from c_hash
+      BigInteger cHash =
           ZkpChallengeUtils.computeSchnorrChallenge(domainParams, pubKey, t, hashAlgorithm);
       BigInteger c = cHash.mod(q); // Reduce the hash modulo q
 
       // 4. Compute response s = (v - c*x) mod q
       BigInteger cx = c.multiply(x).mod(q);
       BigInteger vMinusCx =
-          v.subtract(cx); // Renamed from vMinusCx (already compliant, ensuring consistency)
+          v.subtract(cx);
       BigInteger s = vMinusCx.mod(q); // (v - c*x) mod q. Handles negative results correctly.
 
       // Use the static factory method instead of the private constructor

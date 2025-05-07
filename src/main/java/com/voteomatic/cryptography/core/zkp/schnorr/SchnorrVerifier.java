@@ -78,7 +78,7 @@ public class SchnorrVerifier implements ZkpVerifier<SchnorrStatement, SchnorrPro
       // 1. Re-compute challenge c = H(p || q || g || y || t) mod q using utility class
       DomainParameters domainParams = new DomainParameters(p, q, g);
       PublicKey pubKey = new PublicKey(domainParams, y);
-      BigInteger cHash = // Renamed from c_hash
+      BigInteger cHash =
           ZkpChallengeUtils.computeSchnorrChallenge(domainParams, pubKey, t, hashAlgorithm);
       BigInteger c = cHash.mod(q); // Reduce the hash modulo q
 
@@ -89,7 +89,7 @@ public class SchnorrVerifier implements ZkpVerifier<SchnorrStatement, SchnorrPro
       BigInteger check2 = y.modPow(c, p);
 
       // 4. Compute t' = (check1 * check2) mod p
-      BigInteger tPrime = check1.multiply(check2).mod(p); // Renamed from t_prime
+      BigInteger tPrime = check1.multiply(check2).mod(p);
 
       // 5. Compare t' with the commitment t from the proof
       return tPrime.equals(t);
