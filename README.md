@@ -54,7 +54,7 @@ La bibliothèque est organisée en plusieurs modules principaux, chacun responsa
 
 ## Pour Commencer
 
-Consultez les `README.md` spécifiques à chaque module pour une description détaillée de leurs composants et de leur utilisation.
+Consultez les `README.md` spécifiques à chaque module pour une description détaillée de leurs composants et de leur utilisation (documentation architecturale).
 
 -   [Documentation du module `core/elgamal`](src/main/java/com/voteomatic/cryptography/core/elgamal/README.md)
 -   [Documentation du module `core/zkp`](src/main/java/com/voteomatic/cryptography/core/zkp/README.md)
@@ -62,6 +62,14 @@ Consultez les `README.md` spécifiques à chaque module pour une description dé
 -   [Documentation du module `keymanagement`](src/main/java/com/voteomatic/cryptography/keymanagement/README.md)
 -   [Documentation du module `securityutils`](src/main/java/com/voteomatic/cryptography/securityutils/README.md)
 -   [Documentation du module `voting`](src/main/java/com/voteomatic/cryptography/voting/README.md)
+
+## Documentation Technique Approfondie
+
+Pour une compréhension plus détaillée du fonctionnement interne des mécanismes cryptographiques clés :
+
+-   [**Processus de Vote Technique** (`TECHNICAL_VOTING_PROCESS.md`)](TECHNICAL_VOTING_PROCESS.md): Décrit les étapes de création d'un vote chiffré, sa vérification et le processus de décompte.
+-   [**Stockage des Clés (PKCS12)** (`TECHNICAL_KEY_STORAGE.md`)](TECHNICAL_KEY_STORAGE.md): Explique comment les clés cryptographiques sont gérées et stockées de manière sécurisée en utilisant le format PKCS#12.
+-   [**Preuve Disjonctive de Chaum-Pedersen** (`TECHNICAL_ZKP_DISJUNCTIVE_CHAUM_PEDERSEN.md`)](TECHNICAL_ZKP_DISJUNCTIVE_CHAUM_PEDERSEN.md): Détaille le protocole ZKP utilisé pour prouver la validité d'un vote chiffré sans révéler son contenu.
 
 ---
 
