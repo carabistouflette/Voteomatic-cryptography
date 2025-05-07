@@ -1,4 +1,4 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -7,6 +7,10 @@ import static org.mockito.Mockito.*;
 import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
+import com.voteomatic.cryptography.core.zkp.Proof;
+import com.voteomatic.cryptography.core.zkp.Statement;
+import com.voteomatic.cryptography.core.zkp.Witness;
+import com.voteomatic.cryptography.core.zkp.ZkpException;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;

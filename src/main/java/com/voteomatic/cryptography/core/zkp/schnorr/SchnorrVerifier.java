@@ -1,7 +1,10 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.schnorr;
 
 import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
+import com.voteomatic.cryptography.core.zkp.ZkpChallengeUtils;
+import com.voteomatic.cryptography.core.zkp.ZkpException;
+import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 import java.math.BigInteger;

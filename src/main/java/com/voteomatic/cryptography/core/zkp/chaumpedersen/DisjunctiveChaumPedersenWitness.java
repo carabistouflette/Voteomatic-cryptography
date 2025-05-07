@@ -1,5 +1,6 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
+import com.voteomatic.cryptography.core.zkp.Witness;
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -51,8 +52,12 @@ public class DisjunctiveChaumPedersenWitness implements Witness {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     DisjunctiveChaumPedersenWitness that = (DisjunctiveChaumPedersenWitness) o;
     return v == that.v && Objects.equals(r, that.r);
   }

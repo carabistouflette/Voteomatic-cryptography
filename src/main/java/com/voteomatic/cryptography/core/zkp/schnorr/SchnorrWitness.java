@@ -1,5 +1,6 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.schnorr;
 
+import com.voteomatic.cryptography.core.zkp.Witness;
 import java.math.BigInteger;
 import java.util.Objects;
 

@@ -1,10 +1,19 @@
 package com.voteomatic.cryptography.voting;
 
 import com.voteomatic.cryptography.core.DomainParameters;
-import com.voteomatic.cryptography.core.elgamal.*;
+import com.voteomatic.cryptography.core.elgamal.Ciphertext;
+import com.voteomatic.cryptography.core.elgamal.ElGamalCipher;
+import com.voteomatic.cryptography.core.elgamal.EncryptionResult;
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
-import com.voteomatic.cryptography.core.zkp.*;
+import com.voteomatic.cryptography.core.zkp.Proof;
+import com.voteomatic.cryptography.core.zkp.Statement;
+import com.voteomatic.cryptography.core.zkp.ZkpException;
+import com.voteomatic.cryptography.core.zkp.ZkpProver;
+import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
+import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPedersenProof;
+import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPedersenStatement;
+import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPedersenWitness;
 import com.voteomatic.cryptography.keymanagement.KeyService;
 import java.math.BigInteger;
 import java.util.HashMap;

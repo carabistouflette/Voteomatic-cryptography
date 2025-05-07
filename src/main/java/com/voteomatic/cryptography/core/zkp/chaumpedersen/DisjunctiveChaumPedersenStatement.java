@@ -1,8 +1,9 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
 import com.voteomatic.cryptography.core.DomainParameters; // Added
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
+import com.voteomatic.cryptography.core.zkp.Statement;
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -117,8 +118,12 @@ public class DisjunctiveChaumPedersenStatement implements Statement {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     DisjunctiveChaumPedersenStatement that = (DisjunctiveChaumPedersenStatement) o;
     return Objects.equals(params, that.params)
         && Objects.equals(h, that.h)

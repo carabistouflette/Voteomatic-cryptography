@@ -54,8 +54,12 @@ public class EncryptedVote implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     EncryptedVote that = (EncryptedVote) o;
     return Objects.equals(voteCiphertext, that.voteCiphertext)
         && Objects.equals(validityProof, that.validityProof); // Use Objects.equals for null safety

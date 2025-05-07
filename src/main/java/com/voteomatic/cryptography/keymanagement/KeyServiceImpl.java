@@ -9,10 +9,19 @@ import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 // import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl; // Removed unused
 // import
 import java.math.BigInteger;
-import java.security.*;
-// import java.security.cert.Certificate; // Removed unused import
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+// java.security.KeyPair will be fully qualified where used.
 import java.security.KeyPairGenerator; // Added for RSA key generation
 // Note: java.security.KeyPair is already imported via java.security.*
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
+// java.security.PrivateKey will be fully qualified where used.
+// java.security.PublicKey will be fully qualified where used.
+import java.security.SecureRandom;
+import java.security.Security;
+import java.security.SignatureException;
+// import java.security.cert.Certificate; // Removed unused import
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;

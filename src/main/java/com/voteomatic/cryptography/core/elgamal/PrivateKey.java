@@ -63,8 +63,12 @@ public class PrivateKey {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     PrivateKey that = (PrivateKey) o;
     // Equality depends on both the parameters and the private exponent.
     return params.equals(that.params) && x.equals(that.x);

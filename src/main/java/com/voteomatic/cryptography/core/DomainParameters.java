@@ -61,8 +61,12 @@ public final class DomainParameters {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     DomainParameters that = (DomainParameters) o;
     return p.equals(that.p) && g.equals(that.g) && q.equals(that.q);
   }

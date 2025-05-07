@@ -2,40 +2,36 @@
 
 Ce module implémente divers protocoles de Preuves à Divulgation Nulle de Connaissance (Zero-Knowledge Proofs). Les ZKP permettent à une partie (le prouveur) de prouver à une autre partie (le vérifieur) qu'une déclaration est vraie, sans révéler aucune information au-delà de la validité de la déclaration elle-même.
 
-## Composants
+## Organisation des Packages
 
-### Interfaces Générales ZKP
+Le module ZKP est structuré en plusieurs packages pour une meilleure organisation :
 
--   [`Proof.java`](Proof.java:10): Interface marqueur pour tous les types de preuves ZKP. Indique qu'un objet est une preuve sérialisable.
--   [`Statement.java`](Statement.java:8): Interface représentant la déclaration publique qui doit être prouvée.
--   [`Witness.java`](Witness.java:8): Interface représentant l'information secrète (le témoin) que le prouveur utilise pour construire la preuve.
--   [`ZkpProver.java`](ZkpProver.java:12): Interface générique pour les prouveurs ZKP. Un prouveur génère une [`Proof`](Proof.java:10) pour un [`Statement`](Statement.java:8) donné, en utilisant un [`Witness`](Witness.java:8).
--   [`ZkpVerifier.java`](ZkpVerifier.java:11): Interface générique pour les vérifieurs ZKP. Un vérifieur valide une [`Proof`](Proof.java:10) par rapport à un [`Statement`](Statement.java:8).
+### Package de Base : `com.voteomatic.cryptography.core.zkp`
 
-### Protocole de Schnorr
+Ce package racine contient les éléments fondamentaux et communs à toutes les implémentations de ZKP :
 
-Utilisé pour prouver la connaissance d'un logarithme discret.
+*   **Interfaces Générales ZKP**:
+    *   [`Proof.java`](Proof.java:10): Interface marqueur pour tous les types de preuves ZKP. Indique qu'un objet est une preuve sérialisable.
+    *   [`Statement.java`](Statement.java:8): Interface représentant la déclaration publique qui doit être prouvée.
+    *   [`Witness.java`](Witness.java:8): Interface représentant l'information secrète (le témoin) que le prouveur utilise pour construire la preuve.
+    *   [`ZkpProver.java`](ZkpProver.java:12): Interface générique pour les prouveurs ZKP. Un prouveur génère une [`Proof`](Proof.java:10) pour un [`Statement`](Statement.java:8) donné, en utilisant un [`Witness`](Witness.java:8).
+    *   [`ZkpVerifier.java`](ZkpVerifier.java:11): Interface générique pour les vérifieurs ZKP. Un vérifieur valide une [`Proof`](Proof.java:10) par rapport à un [`Statement`](Statement.java:8).
+*   **Utilitaires et Exceptions**:
+    *   [`ZkpChallengeUtils.java`](ZkpChallengeUtils.java:12): Fournit des méthodes utilitaires pour calculer les défis (challenges) utilisés dans les protocoles ZKP, assurant la consistance et la sécurité.
+    *   [`ZkpException.java`](ZkpException.java:7): Exception personnalisée pour les erreurs survenant pendant les opérations ZKP.
+*   **Classes de base** (si applicable).
 
--   [`SchnorrProof.java`](SchnorrProof.java:10): Représente une preuve générée par le protocole de Schnorr.
--   [`SchnorrProver.java`](SchnorrProver.java:16): Implémente la logique du prouveur pour le protocole de Schnorr.
--   [`SchnorrStatement.java`](SchnorrStatement.java:11): Définit la déclaration publique pour une preuve de Schnorr (par exemple, une clé publique).
--   [`SchnorrVerifier.java`](SchnorrVerifier.java:13): Implémente la logique du vérifieur pour le protocole de Schnorr.
--   [`SchnorrWitness.java`](SchnorrWitness.java:10): Contient la valeur secrète (par exemple, une clé privée) utilisée par le prouveur de Schnorr.
+### Sous-packages pour Implémentations Spécifiques
 
-### Protocole Disjonctif de Chaum-Pedersen
+Les implémentations concrètes de protocoles ZKP spécifiques se trouvent dans des sous-packages dédiés :
 
-Utilisé pour prouver qu'un texte chiffré ElGamal chiffre l'un des deux messages possibles (par exemple, 0 ou 1) sans révéler lequel.
+*   **`com.voteomatic.cryptography.core.zkp.chaumpedersen`**:
+    *   Contient l'implémentation du protocole **Disjonctif de Chaum-Pedersen**. Ce protocole est typiquement utilisé pour prouver qu'un texte chiffré ElGamal chiffre l'un de deux messages possibles (par exemple, 0 ou 1) sans révéler lequel.
+    *   Classes principales : [`DisjunctiveChaumPedersenProof.java`](chaumpedersen/DisjunctiveChaumPedersenProof.java), [`DisjunctiveChaumPedersenProver.java`](chaumpedersen/DisjunctiveChaumPedersenProver.java), [`DisjunctiveChaumPedersenStatement.java`](chaumpedersen/DisjunctiveChaumPedersenStatement.java), [`DisjunctiveChaumPedersenVerifier.java`](chaumpedersen/DisjunctiveChaumPedersenVerifier.java), [`DisjunctiveChaumPedersenWitness.java`](chaumpedersen/DisjunctiveChaumPedersenWitness.java).
 
--   [`DisjunctiveChaumPedersenProof.java`](DisjunctiveChaumPedersenProof.java:15): Représente une preuve générée par le protocole disjonctif de Chaum-Pedersen.
--   [`DisjunctiveChaumPedersenProver.java`](DisjunctiveChaumPedersenProver.java:15): Implémente la logique du prouveur pour ce protocole.
--   [`DisjunctiveChaumPedersenStatement.java`](DisjunctiveChaumPedersenStatement.java:16): Définit la déclaration publique, incluant le texte chiffré et les clés publiques.
--   [`DisjunctiveChaumPedersenVerifier.java`](DisjunctiveChaumPedersenVerifier.java:13): Implémente la logique du vérifieur pour ce protocole.
--   [`DisjunctiveChaumPedersenWitness.java`](DisjunctiveChaumPedersenWitness.java:11): Contient l'aléa utilisé pour le chiffrement et la valeur du message réel.
-
-### Utilitaires et Exceptions
-
--   [`ZkpChallengeUtils.java`](ZkpChallengeUtils.java:12): Fournit des méthodes utilitaires pour calculer les défis (challenges) utilisés dans les protocoles ZKP, assurant la consistance et la sécurité.
--   [`ZkpException.java`](ZkpException.java:7): Exception personnalisée pour les erreurs survenant pendant les opérations ZKP.
+*   **`com.voteomatic.cryptography.core.zkp.schnorr`**:
+    *   Contient l'implémentation du **protocole de Schnorr**. Ce protocole est utilisé pour prouver la connaissance d'un logarithme discret.
+    *   Classes principales : [`SchnorrProof.java`](schnorr/SchnorrProof.java), [`SchnorrProver.java`](schnorr/SchnorrProver.java), [`SchnorrStatement.java`](schnorr/SchnorrStatement.java), [`SchnorrVerifier.java`](schnorr/SchnorrVerifier.java), [`SchnorrWitness.java`](schnorr/SchnorrWitness.java).
 
 ## Utilisation
 

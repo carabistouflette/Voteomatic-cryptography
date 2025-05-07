@@ -1,5 +1,6 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
+import com.voteomatic.cryptography.core.zkp.Proof;
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -26,6 +27,18 @@ public class DisjunctiveChaumPedersenProof implements Proof {
   private final BigInteger c1; // Challenge for v=1 (real or simulated)
   private final BigInteger r1; // Response for v=1 (w1 + c1*r or simulated)
 
+  /**
+   * Constructs a DisjunctiveChaumPedersenProof.
+   *
+   * @param a0 Commitment component 1 for v=0.
+   * @param b0 Commitment component 2 for v=0.
+   * @param c0 Challenge for v=0.
+   * @param r0 Response for v=0.
+   * @param a1 Commitment component 1 for v=1.
+   * @param b1 Commitment component 2 for v=1.
+   * @param c1 Challenge for v=1.
+   * @param r1 Response for v=1.
+   */
   public DisjunctiveChaumPedersenProof(
       BigInteger a0,
       BigInteger b0,
@@ -84,8 +97,12 @@ public class DisjunctiveChaumPedersenProof implements Proof {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     DisjunctiveChaumPedersenProof that = (DisjunctiveChaumPedersenProof) o;
     return Objects.equals(a0, that.a0)
         && Objects.equals(b0, that.b0)

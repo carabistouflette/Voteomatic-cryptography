@@ -1,6 +1,11 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
 import com.voteomatic.cryptography.core.DomainParameters;
+import com.voteomatic.cryptography.core.zkp.Proof;
+import com.voteomatic.cryptography.core.zkp.Statement;
+import com.voteomatic.cryptography.core.zkp.ZkpChallengeUtils;
+import com.voteomatic.cryptography.core.zkp.ZkpException;
+import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException; // Added import
 import java.math.BigInteger;
@@ -14,6 +19,11 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
 
   private final HashAlgorithm hashAlgorithm;
 
+  /**
+   * Constructs a DisjunctiveChaumPedersenVerifier.
+   *
+   * @param hashAlgorithm The hash algorithm to use for challenge recalculation.
+   */
   public DisjunctiveChaumPedersenVerifier(HashAlgorithm hashAlgorithm) {
     this.hashAlgorithm = Objects.requireNonNull(hashAlgorithm, "HashAlgorithm cannot be null");
   }

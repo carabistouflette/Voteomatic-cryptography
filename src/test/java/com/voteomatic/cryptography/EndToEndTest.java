@@ -8,7 +8,12 @@ import com.voteomatic.cryptography.core.elgamal.ElGamalCipherImpl;
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 // Removed InMemoryKeyStorageHandler import
-import com.voteomatic.cryptography.core.zkp.*;
+import com.voteomatic.cryptography.core.zkp.ZkpException;
+import com.voteomatic.cryptography.core.zkp.ZkpProver;
+import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
+import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPedersenProver;
+import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPedersenStatement;
+import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPedersenVerifier;
 import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
 import com.voteomatic.cryptography.io.PKCS12KeyStorageHandler;

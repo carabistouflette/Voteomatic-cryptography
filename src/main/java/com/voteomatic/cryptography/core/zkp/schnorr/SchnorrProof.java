@@ -1,5 +1,6 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.schnorr;
 
+import com.voteomatic.cryptography.core.zkp.Proof;
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -53,8 +54,12 @@ public class SchnorrProof implements Proof {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     SchnorrProof that = (SchnorrProof) o;
     return Objects.equals(t, that.t) && Objects.equals(s, that.s);
   }

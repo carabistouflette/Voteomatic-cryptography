@@ -1,4 +1,4 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
 import static org.junit.jupiter.api.Assertions.*;
 

@@ -33,8 +33,12 @@ public class EncryptionResult {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     EncryptionResult that = (EncryptionResult) o;
     return Objects.equals(ciphertext, that.ciphertext)
         && Objects.equals(randomness, that.randomness);

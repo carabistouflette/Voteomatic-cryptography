@@ -1,5 +1,6 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.schnorr;
 
+import com.voteomatic.cryptography.core.zkp.ZkpException;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SHA256HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;

@@ -64,8 +64,12 @@ public class Ciphertext implements Serializable {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     Ciphertext that = (Ciphertext) o;
     // Adjusted equals to handle potential nulls introduced by removing constructor checks
     return Objects.equals(c1, that.c1) && Objects.equals(c2, that.c2);

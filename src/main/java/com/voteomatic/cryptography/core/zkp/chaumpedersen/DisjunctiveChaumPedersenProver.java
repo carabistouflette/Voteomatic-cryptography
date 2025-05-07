@@ -1,6 +1,12 @@
-package com.voteomatic.cryptography.core.zkp;
+package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
 import com.voteomatic.cryptography.core.DomainParameters; // Added
+import com.voteomatic.cryptography.core.zkp.Proof;
+import com.voteomatic.cryptography.core.zkp.Statement;
+import com.voteomatic.cryptography.core.zkp.Witness;
+import com.voteomatic.cryptography.core.zkp.ZkpChallengeUtils;
+import com.voteomatic.cryptography.core.zkp.ZkpException;
+import com.voteomatic.cryptography.core.zkp.ZkpProver;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
@@ -17,6 +23,12 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
   private final SecureRandomGenerator randomGenerator;
   private final HashAlgorithm hashAlgorithm;
 
+  /**
+   * Constructs a DisjunctiveChaumPedersenProver.
+   *
+   * @param randomGenerator The secure random number generator.
+   * @param hashAlgorithm The hash algorithm to use for challenge generation.
+   */
   public DisjunctiveChaumPedersenProver(
       SecureRandomGenerator randomGenerator, HashAlgorithm hashAlgorithm) {
     this.randomGenerator =
@@ -55,11 +67,15 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
     // q is now correctly retrieved from DomainParameters
 
     try {
-      BigInteger a0, b0, r0, c0, c; // Declare c here
-      BigInteger a1,
-          b1,
-          r1,
-          c1_challenge; // Renamed c1 to c1_challenge to avoid confusion with ciphertext c1
+      BigInteger a0;
+      BigInteger b0;
+      BigInteger r0;
+      BigInteger c0;
+      BigInteger c; // Declare c here
+      BigInteger a1;
+      BigInteger b1;
+      BigInteger r1;
+      BigInteger c1_challenge; // Renamed c1 to c1_challenge to avoid confusion with ciphertext c1
 
       if (v == 0) { // Real proof for m0, simulate for m1
         // Simulate for v=1
