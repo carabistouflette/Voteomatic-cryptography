@@ -69,7 +69,7 @@ public class DisjunctiveChaumPedersenWitness implements Witness {
 
   @Override
   public String toString() {
-    // Avoid logging secret witness values in production
+    // TODO: Avoid logging secret witness values in production
     return "DisjunctiveChaumPedersenWitness{" + "r=[secret]" + ", v=" + v + '}';
   }
 }

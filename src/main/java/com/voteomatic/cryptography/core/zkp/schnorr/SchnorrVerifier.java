@@ -103,6 +103,4 @@ public class SchnorrVerifier implements ZkpVerifier<SchnorrStatement, SchnorrPro
       throw new ZkpException("Arithmetic error during proof verification", e);
     }
   }
-
-  // Removed private helper methods: writeBigIntegerWithLength and computeChallenge
 }

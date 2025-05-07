@@ -1,14 +1,14 @@
 package com.voteomatic.cryptography.securityutils;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.when; // Import Mockito static methods
+import static org.mockito.Mockito.when;
 
 import java.security.*;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito; // Import Mockito
+import org.mockito.Mockito;
 
 class PublicVerificationKeyImplTest {
 

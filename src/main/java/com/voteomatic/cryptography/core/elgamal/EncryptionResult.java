@@ -56,7 +56,7 @@ public class EncryptionResult {
         + ciphertext
         + ", randomness="
         + randomness
-        + // Be cautious about logging randomness in production
+        +
         '}';
   }
 }

@@ -115,7 +115,7 @@ public class PKCS12KeyStorageHandler implements KeyStorageHandler {
       }
       return password.toCharArray();
     } else {
-      // Extend later for other sources (e.g., file, config)
+      // TODO: Extend later for other sources (e.g., file, config)
       throw new DataHandlingException(
           "Unsupported password source format: " + passwordSource + ". Use 'env:VAR_NAME'.");
     }
@@ -216,8 +216,6 @@ public class PKCS12KeyStorageHandler implements KeyStorageHandler {
 
     // The certificate chain usually contains just the single certificate for the key pair
     Certificate[] certificateChain = {certificate};
-    // KeyStore.ProtectionParameter entryPasswordProtection = new
-    // KeyStore.PasswordProtection(password); // Removed unused variable
 
     // Synchronize writes to prevent race conditions when modifying the file
     synchronized (lock) {

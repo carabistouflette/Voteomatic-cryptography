@@ -7,7 +7,7 @@ import com.voteomatic.cryptography.core.zkp.ZkpChallengeUtils;
 import com.voteomatic.cryptography.core.zkp.ZkpException;
 import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
-import com.voteomatic.cryptography.securityutils.SecurityUtilException; // Added import
+import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -127,6 +127,4 @@ public class DisjunctiveChaumPedersenVerifier implements ZkpVerifier {
       // e);
     }
   }
-
-  // Removed private helper methods: calculateChallenge and serializeForChallenge
 }

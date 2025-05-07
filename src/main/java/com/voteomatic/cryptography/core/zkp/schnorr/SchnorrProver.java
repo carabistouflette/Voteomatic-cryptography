@@ -1,7 +1,7 @@
 package com.voteomatic.cryptography.core.zkp.schnorr;
 
-import com.voteomatic.cryptography.core.DomainParameters; // Needed for statement access
-import com.voteomatic.cryptography.core.elgamal.PublicKey; // Needed for statement access
+import com.voteomatic.cryptography.core.DomainParameters;
+import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.core.zkp.ZkpChallengeUtils;
 import com.voteomatic.cryptography.core.zkp.ZkpException;
 import com.voteomatic.cryptography.core.zkp.ZkpProver;
@@ -115,6 +115,4 @@ public class SchnorrProver implements ZkpProver<SchnorrStatement, SchnorrWitness
       throw new ZkpException("Arithmetic error during Schnorr proof generation", e);
     }
   }
-
-  // Removed private helper methods: writeBigIntegerWithLength and computeChallenge
 }

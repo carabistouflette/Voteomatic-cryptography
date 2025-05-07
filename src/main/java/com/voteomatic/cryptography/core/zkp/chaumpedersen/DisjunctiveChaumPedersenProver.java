@@ -1,6 +1,6 @@
 package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
-import com.voteomatic.cryptography.core.DomainParameters; // Added
+import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.zkp.Proof;
 import com.voteomatic.cryptography.core.zkp.Statement;
 import com.voteomatic.cryptography.core.zkp.Witness;
@@ -10,7 +10,6 @@ import com.voteomatic.cryptography.core.zkp.ZkpProver;
 import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecurityUtilException;
-// Removed unused imports: java.io.ByteArrayOutputStream, java.io.IOException
 import java.math.BigInteger;
 import java.util.Objects;
 
@@ -63,15 +62,12 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
     BigInteger r = wit.getR(); // ElGamal randomness
     int v = wit.getV(); // Actual message index (0 or 1)
 
-    // Removed incorrect calculation: q = p - 1
-    // q is now correctly retrieved from DomainParameters
-
     try {
       BigInteger a0;
       BigInteger b0;
       BigInteger r0;
       BigInteger c0;
-      BigInteger c; // Declare c here
+      BigInteger c;
       BigInteger a1;
       BigInteger b1;
       BigInteger r1;
@@ -157,6 +153,4 @@ public class DisjunctiveChaumPedersenProver implements ZkpProver {
           "Failed to generate Disjunctive Chaum-Pedersen proof: " + e.getMessage(), e);
     }
   }
-
-  // Removed private helper methods: calculateChallenge and serializeForChallenge
 }

@@ -1,6 +1,6 @@
 package com.voteomatic.cryptography.core.zkp.chaumpedersen;
 
-import com.voteomatic.cryptography.core.DomainParameters; // Added
+import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.elgamal.Ciphertext;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.core.zkp.Statement;
@@ -90,11 +90,11 @@ public class DisjunctiveChaumPedersenStatement implements Statement {
 
   public BigInteger getQ() {
     return params.getQ();
-  } // Added getter for q
+  }
 
   public DomainParameters getParams() {
     return params;
-  } // Added getter for params object
+  }
 
   public BigInteger getH() {
     return h;

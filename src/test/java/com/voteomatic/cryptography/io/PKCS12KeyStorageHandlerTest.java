@@ -78,7 +78,6 @@ class PKCS12KeyStorageHandlerTest {
           IOException {
     testKeyPair = generateTestingKeyPair();
     testCertificate = generateSelfSignedCertificate(testKeyPair, "CN=Test Cert, O=Voteomatic Test");
-    // Add BouncyCastle provider if not already added
     if (Security.getProvider("BC") == null) {
       Security.addProvider(new org.bouncycastle.jce.provider.BouncyCastleProvider());
     }
@@ -637,7 +636,7 @@ class PKCS12KeyStorageHandlerTest {
     // Manually create a keystore and add a trusted certificate entry
     KeyStore ks = KeyStore.getInstance(KEYSTORE_TYPE);
     ks.load(null, KEYSTORE_PASSWORD); // Initialize empty keystore
-    ks.setCertificateEntry(trustedCertAlias, testCertificate); // Add cert only
+    ks.setCertificateEntry(trustedCertAlias, testCertificate);
 
     // Save this manually created keystore
     try (FileOutputStream fos = new FileOutputStream(keystorePath.toFile())) {

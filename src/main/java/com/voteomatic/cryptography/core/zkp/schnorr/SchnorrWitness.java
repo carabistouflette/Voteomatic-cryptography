@@ -10,7 +10,7 @@ import java.util.Objects;
  */
 public class SchnorrWitness implements Witness {
 
-  private final BigInteger secretValue; // Renamed from x
+  private final BigInteger secretValue; // x
 
   /**
    * Private constructor for SchnorrWitness. Validation is done in the factory method.
@@ -37,30 +37,30 @@ public class SchnorrWitness implements Witness {
     return new SchnorrWitness(secretValue);
   }
 
-  public BigInteger getSecretValue() { // Renamed from getX
+  public BigInteger getSecretValue() { // getX
     return secretValue;
   }
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) { // Added braces
+    if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) { // Added braces
+    if (o == null || getClass() != o.getClass()) {
       return false;
     }
     SchnorrWitness that = (SchnorrWitness) o;
-    return Objects.equals(secretValue, that.secretValue); // Use renamed variable
+    return Objects.equals(secretValue, that.secretValue);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(secretValue); // Use renamed variable
+    return Objects.hash(secretValue);
   }
 
   @Override
   public String toString() {
-    // Avoid logging the secret value directly in production environments
-    return "SchnorrWitness{secretValue=HIDDEN}"; // Use renamed variable (optional, kept hidden)
+    // TODO: Avoid logging the secret value directly in production environments
+    return "SchnorrWitness{secretValue=HIDDEN}";
   }
 }

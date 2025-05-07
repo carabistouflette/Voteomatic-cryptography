@@ -48,7 +48,6 @@ public class DisjunctiveChaumPedersenProof implements Proof {
       BigInteger b1,
       BigInteger c1,
       BigInteger r1) {
-    // Add null checks for all parameters
     this.a0 = Objects.requireNonNull(a0, "a0 cannot be null");
     this.b0 = Objects.requireNonNull(b0, "b0 cannot be null");
     this.c0 = Objects.requireNonNull(c0, "c0 cannot be null");
@@ -57,7 +56,6 @@ public class DisjunctiveChaumPedersenProof implements Proof {
     this.b1 = Objects.requireNonNull(b1, "b1 cannot be null");
     this.c1 = Objects.requireNonNull(c1, "c1 cannot be null");
     this.r1 = Objects.requireNonNull(r1, "r1 cannot be null");
-    // Removed 'c' field
   }
 
   // Getters for all fields
@@ -92,8 +90,6 @@ public class DisjunctiveChaumPedersenProof implements Proof {
   public BigInteger getR1() {
     return r1;
   }
-
-  // Removed getC()
 
   @Override
   public boolean equals(Object o) {

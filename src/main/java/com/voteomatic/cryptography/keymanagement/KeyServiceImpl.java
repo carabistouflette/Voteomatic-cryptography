@@ -1,31 +1,23 @@
 package com.voteomatic.cryptography.keymanagement;
 
-import com.voteomatic.cryptography.core.DomainParameters; // Added
+import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
-// import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl; // Removed unused
-// import
 import java.math.BigInteger;
 import java.security.InvalidKeyException;
 import java.security.KeyFactory;
-// java.security.KeyPair will be fully qualified where used.
-import java.security.KeyPairGenerator; // Added for RSA key generation
-// Note: java.security.KeyPair is already imported via java.security.*
+import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
-// java.security.PrivateKey will be fully qualified where used.
-// java.security.PublicKey will be fully qualified where used.
 import java.security.SecureRandom;
 import java.security.Security;
 import java.security.SignatureException;
-// import java.security.cert.Certificate; // Removed unused import
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
-// import java.security.spec.KeySpec; // Removed unused import
 import java.util.Date;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +28,6 @@ import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
 import javax.crypto.spec.DHPrivateKeySpec;
 import javax.crypto.spec.DHPublicKeySpec;
-// import java.io.IOException; // Removed unused import
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
@@ -446,12 +437,11 @@ public class KeyServiceImpl implements KeyService {
 
     long now = System.currentTimeMillis();
     Date startDate = new Date(now);
-    // Validity: 10 years, adjust as needed
+    // Validity: 10 years
     Date endDate = new Date(now + TimeUnit.DAYS.toMillis(365 * 10));
 
     // Use the key pair's public key for the certificate
     java.security.PublicKey pubKey = keyPair.getPublic();
-    // java.security.PrivateKey privKey = keyPair.getPrivate(); // Removed unused variable
 
     // Subject and Issuer are the same for self-signed certs
     X500Name subject = new X500Name(subjectDN);
@@ -483,10 +473,6 @@ public class KeyServiceImpl implements KeyService {
         new JcaX509CertificateConverter()
             .setProvider(BouncyCastleProvider.PROVIDER_NAME)
             .getCertificate(certBuilder.build(contentSigner));
-
-    // Optional: Verify the certificate signature (self-verification)
-    // certificate.verify(pubKey); // Removed: Verification fails as cert pub key (ElGamal) doesn't
-    // match signing key type (RSA)
 
     return certificate;
   }

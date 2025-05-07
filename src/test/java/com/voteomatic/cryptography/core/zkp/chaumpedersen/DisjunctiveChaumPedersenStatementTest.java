@@ -171,7 +171,7 @@ class DisjunctiveChaumPedersenStatementTest {
   @Test
   void equals_differentP_returnsFalse() {
     DomainParameters diffParams =
-        new DomainParameters(p_val.add(BigInteger.ONE), g_val, q_val); // Modify p
+        new DomainParameters(p_val.add(BigInteger.ONE), g_val, q_val); 
     PublicKey diffKey = new PublicKey(diffParams, h_val);
     DisjunctiveChaumPedersenStatement other =
         DisjunctiveChaumPedersenStatement.create(diffKey, ciphertext, m0, m1);
@@ -181,7 +181,7 @@ class DisjunctiveChaumPedersenStatementTest {
   @Test
   void equals_differentG_returnsFalse() {
     DomainParameters diffParams =
-        new DomainParameters(p_val, g_val.add(BigInteger.ONE), q_val); // Modify g
+        new DomainParameters(p_val, g_val.add(BigInteger.ONE), q_val);
     PublicKey diffKey = new PublicKey(diffParams, h_val);
     DisjunctiveChaumPedersenStatement other =
         DisjunctiveChaumPedersenStatement.create(diffKey, ciphertext, m0, m1);
@@ -190,7 +190,7 @@ class DisjunctiveChaumPedersenStatementTest {
 
   @Test
   void equals_differentH_returnsFalse() {
-    PublicKey diffKey = new PublicKey(domainParams, h_val.add(BigInteger.ONE)); // Modify h (y)
+    PublicKey diffKey = new PublicKey(domainParams, h_val.add(BigInteger.ONE));
     DisjunctiveChaumPedersenStatement other =
         DisjunctiveChaumPedersenStatement.create(diffKey, ciphertext, m0, m1);
     assertFalse(statement.equals(other));

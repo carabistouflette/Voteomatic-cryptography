@@ -4,8 +4,8 @@ import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
 import com.voteomatic.cryptography.core.zkp.Proof;
 import com.voteomatic.cryptography.core.zkp.Statement;
-import com.voteomatic.cryptography.core.zkp.ZkpException; // Needed for verifyVote
-import java.math.BigInteger; // Add import for BigInteger
+import com.voteomatic.cryptography.core.zkp.ZkpException;
+import java.math.BigInteger;
 import java.util.List;
 
 /**

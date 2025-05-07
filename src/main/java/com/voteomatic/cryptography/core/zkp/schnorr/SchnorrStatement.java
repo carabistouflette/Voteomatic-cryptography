@@ -11,10 +11,10 @@ import java.util.Objects;
  */
 public class SchnorrStatement implements Statement {
 
-  private final BigInteger primeModulus; // Renamed from p
-  private final BigInteger subgroupOrder; // Renamed from q
-  private final BigInteger generator; // Renamed from g
-  private final BigInteger publicValue; // Renamed from y
+  private final BigInteger primeModulus; // p
+  private final BigInteger subgroupOrder; // q
+  private final BigInteger generator; // g
+  private final BigInteger publicValue; // y
 
   /**
    * Private constructor for SchnorrStatement. Validation is done in the factory method.
@@ -67,19 +67,19 @@ public class SchnorrStatement implements Statement {
     return new SchnorrStatement(primeModulus, subgroupOrder, generator, publicValue);
   }
 
-  public BigInteger getP() { // Keep original getter name for compatibility if needed, or rename
+  public BigInteger getP() {
     return primeModulus;
   }
 
-  public BigInteger getQ() { // Keep original getter name for compatibility if needed, or rename
+  public BigInteger getQ() {
     return subgroupOrder;
   }
 
-  public BigInteger getG() { // Keep original getter name for compatibility if needed, or rename
+  public BigInteger getG() {
     return generator;
   }
 
-  public BigInteger getY() { // Keep original getter name for compatibility if needed, or rename
+  public BigInteger getY() {
     return publicValue;
   }
 

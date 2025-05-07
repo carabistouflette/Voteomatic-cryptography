@@ -5,7 +5,7 @@ import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SHA256HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl;
-import com.voteomatic.cryptography.securityutils.SecurityUtilException; // Add missing import
+import com.voteomatic.cryptography.securityutils.SecurityUtilException;
 import java.math.BigInteger;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;

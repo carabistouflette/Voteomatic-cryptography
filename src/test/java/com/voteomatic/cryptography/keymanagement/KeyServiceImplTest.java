@@ -5,7 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
-import com.voteomatic.cryptography.core.DomainParameters; // Added
+import com.voteomatic.cryptography.core.DomainParameters;
 import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
@@ -13,11 +13,11 @@ import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl;
 // Needed for KeyServiceImpl init
 import java.math.BigInteger;
 // JCE KeyPair
-import java.security.cert.Certificate; // JCE Certificate
+import java.security.cert.Certificate;
 import javax.crypto.interfaces.DHPublicKey;
 import javax.crypto.spec.DHParameterSpec;
-import javax.crypto.spec.DHPrivateKeySpec; // Added
-import javax.crypto.spec.DHPublicKeySpec; // Added
+import javax.crypto.spec.DHPrivateKeySpec;
+import javax.crypto.spec.DHPublicKeySpec;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;

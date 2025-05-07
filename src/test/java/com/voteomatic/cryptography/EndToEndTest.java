@@ -7,7 +7,6 @@ import com.voteomatic.cryptography.core.elgamal.ElGamalCipher;
 import com.voteomatic.cryptography.core.elgamal.ElGamalCipherImpl;
 import com.voteomatic.cryptography.core.elgamal.PrivateKey;
 import com.voteomatic.cryptography.core.elgamal.PublicKey;
-// Removed InMemoryKeyStorageHandler import
 import com.voteomatic.cryptography.core.zkp.ZkpException;
 import com.voteomatic.cryptography.core.zkp.ZkpProver;
 import com.voteomatic.cryptography.core.zkp.ZkpVerifier;
@@ -17,7 +16,6 @@ import com.voteomatic.cryptography.core.zkp.chaumpedersen.DisjunctiveChaumPeders
 import com.voteomatic.cryptography.io.DataHandlingException;
 import com.voteomatic.cryptography.io.KeyStorageHandler;
 import com.voteomatic.cryptography.io.PKCS12KeyStorageHandler;
-// Import specific ZKP classes needed
 import com.voteomatic.cryptography.keymanagement.KeyManagementException;
 import com.voteomatic.cryptography.keymanagement.KeyPair;
 import com.voteomatic.cryptography.keymanagement.KeyService;
@@ -26,7 +24,7 @@ import com.voteomatic.cryptography.securityutils.HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SHA256HashAlgorithm;
 import com.voteomatic.cryptography.securityutils.SecureRandomGenerator;
 import com.voteomatic.cryptography.securityutils.SecureRandomGeneratorImpl;
-import com.voteomatic.cryptography.voting.*; // Import all voting classes
+import com.voteomatic.cryptography.voting.*;
 import com.voteomatic.cryptography.voting.VotingException;
 import java.math.BigInteger;
 import java.util.List;
@@ -78,7 +76,7 @@ public class EndToEndTest {
 
   @Test
   void testFullVotingWorkflow()
-      throws KeyManagementException, VotingException, ZkpException { // Add ZkpException
+      throws KeyManagementException, VotingException, ZkpException {
     // 1. Generate Key Pair
     KeyPair keyPair = keyService.generateKeyPair();
     PublicKey publicKey = keyPair.getPublicKey();
@@ -117,7 +115,7 @@ public class EndToEndTest {
 
     // 4.5 Verify Proofs (Optional but recommended in E2E)
     BigInteger m0 = BigInteger.ONE; // g^0
-    BigInteger m1 = publicKey.getG(); // Use generator from the actual public key's parameters
+    BigInteger m1 = publicKey.getG();
 
     // Verify Yes Vote 1
     DisjunctiveChaumPedersenStatement stmtYes1 =
